@@ -82,6 +82,7 @@ class FileItem:
     scan_result: Optional[str] = None
     share_token: Optional[str] = None
     is_dir: bool = False
+    expires_at: Optional[str] = None
 
 
 @dataclass

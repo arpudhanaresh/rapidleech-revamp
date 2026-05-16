@@ -19,13 +19,26 @@ def _active_names() -> set[str]:
     return names
 
 
-def _should_delete(entry, active: set[str], threshold: datetime) -> bool:
+def _should_delete(
+    entry,
+    active: set[str],
+    now: datetime,
+    expiries: dict[str, str],
+    fallback_threshold: datetime,
+) -> bool:
     if entry.name in active:
         return False
     if entry.name.endswith(".aria2") or entry.name == ".ziptmp":
         return False
+    if entry.name in expiries:
+        try:
+            exp = datetime.fromisoformat(expiries[entry.name])
+            return now > exp
+        except ValueError:
+            pass
+    # Fallback for files that predate the expiry table: use mtime
     mtime = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
-    return mtime < threshold
+    return mtime < fallback_threshold
 
 
 def _delete_entry(entry) -> None:
@@ -36,21 +49,24 @@ def _delete_entry(entry) -> None:
 
 
 async def run_cleanup() -> None:
-    if settings.FILE_TTL_HOURS == 0:
+    if settings.FILE_TTL_DEFAULT_HOURS == 0:
         return
 
-    threshold = datetime.now(timezone.utc) - timedelta(hours=settings.FILE_TTL_HOURS)
+    now = datetime.now(timezone.utc)
+    fallback_threshold = now - timedelta(hours=settings.FILE_TTL_DEFAULT_HOURS)
     active = _active_names()
+    expiries = await db.get_all_expiries()
     deleted = 0
 
     try:
         for entry in os.scandir(settings.DOWNLOAD_DIR):
-            if not _should_delete(entry, active, threshold):
+            if not _should_delete(entry, active, now, expiries, fallback_threshold):
                 continue
             try:
                 _delete_entry(entry)
+                await db.delete_file_expiry(entry.name)
                 deleted += 1
-                await db.insert_log("info", f"Auto-deleted {entry.name} (older than {settings.FILE_TTL_HOURS}h)")
+                await db.insert_log("info", f"Auto-deleted {entry.name} (expired)")
             except OSError as e:
                 await db.insert_log("warn", f"Could not delete {entry.name}: {e}")
     except FileNotFoundError:

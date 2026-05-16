@@ -169,7 +169,7 @@ def _add_torrent_handle(sess, job_id: str, url: str, save_path: str):
 
 
 _METADATA_TIMEOUT_S = 60
-_STALL_TIMEOUT_S = 300  # 5 min with zero bytes = dead torrent
+_STALL_TIMEOUT_S = 1200  # 20 min with zero bytes = dead torrent
 
 
 def _wait_for_metadata(job_id: str, handle) -> bool:

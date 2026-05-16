@@ -1,16 +1,16 @@
 from __future__ import annotations
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
-
-from typing import Annotated
+from typing import Optional, Annotated
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from services import file_service
+from config import settings
+from services import file_service, db
 from services.security import sanitize_filename
 
 _COOKIES_FILE = Path(__file__).resolve().parent.parent / "data" / "cookies.txt"
@@ -36,18 +36,20 @@ def _served_bytes(range_header: Optional[str], file_size: int) -> int:
 
 @router.get("/files")
 async def list_files():
-    return file_service.list_files()
+    files = file_service.list_files()
+    expiries = await db.get_all_expiries()
+    for f in files:
+        f.expires_at = expiries.get(f.filename)
+    return files
 
 
 @router.get("/files/download/{filename:path}", responses={404: {"description": _MSG_NOT_FOUND}})
 async def download_file(filename: str, request: Request):
-    import shutil
     safe = sanitize_filename(filename)
     path = file_service.get_filepath(safe)
     if not path:
         raise HTTPException(404, _MSG_NOT_FOUND)
     if os.path.isdir(path):
-        # Serve entire torrent directory as a zip stream
         return StreamingResponse(
             file_service.zip_dir_stream(path),
             media_type=_MIME_ZIP,
@@ -55,8 +57,7 @@ async def download_file(filename: str, request: Request):
         )
     size = os.path.getsize(path)
     served = _served_bytes(request.headers.get("range"), size)
-    from services.db import increment_uploaded
-    await increment_uploaded(served)
+    await db.increment_uploaded(served)
     return FileResponse(
         path,
         filename=safe,
@@ -71,6 +72,7 @@ async def delete_file(filename: str):
     ok = file_service.delete_file(safe)
     if not ok:
         raise HTTPException(404, _MSG_NOT_FOUND)
+    await db.delete_file_expiry(safe)
     return {"message": f"{safe} deleted"}
 
 
@@ -80,6 +82,27 @@ class ZipRequest(BaseModel):
 
 class ZipPrepareRequest(BaseModel):
     dirname: str
+
+
+class ExtendExpiryRequest(BaseModel):
+    hours: int
+
+
+@router.patch("/files/{filename:path}/expiry", responses=_404)
+async def extend_expiry(filename: str, body: ExtendExpiryRequest):
+    safe = sanitize_filename(filename)
+    hours = max(1, min(body.hours, settings.FILE_TTL_MAX_HOURS))
+    new_exp = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+    updated = await db.extend_file_expiry(safe, new_exp)
+    if not updated:
+        # File exists on disk but not yet in expiry table — create the record
+        path = file_service.get_filepath(safe)
+        if not path:
+            raise HTTPException(404, _MSG_NOT_FOUND)
+        now = datetime.now(timezone.utc)
+        new_exp = (now + timedelta(hours=hours)).isoformat()
+        await db.set_file_expiry(safe, new_exp, now.isoformat())
+    return {"expires_at": new_exp}
 
 
 @router.get("/files/browse/{dirname:path}", responses=_404)
@@ -119,8 +142,7 @@ async def download_dir_file(dirname: str, path: str, request: Request):
         raise HTTPException(404, _MSG_NOT_FOUND)
     size = os.path.getsize(filepath)
     served = _served_bytes(request.headers.get("range"), size)
-    from services.db import increment_uploaded
-    await increment_uploaded(served)
+    await db.increment_uploaded(served)
     return FileResponse(
         filepath,
         filename=os.path.basename(filepath),

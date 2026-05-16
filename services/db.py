@@ -65,6 +65,12 @@ CREATE TABLE IF NOT EXISTS activity_log (
     level     TEXT NOT NULL,
     message   TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS file_expiry (
+    filename      TEXT PRIMARY KEY,
+    expires_at    TEXT NOT NULL,
+    downloaded_at TEXT NOT NULL
+);
 """
 
 # PostgreSQL / MySQL don't support AUTOINCREMENT keyword
@@ -236,6 +242,43 @@ async def get_all_pending() -> list[dict]:
     async with AsyncSessionLocal() as s:
         rows = await s.execute(text("SELECT job_id, url, max_conn FROM pending_downloads"))
         return [dict(r._mapping) for r in rows]
+
+
+async def set_file_expiry(filename: str, expires_at: str, downloaded_at: str) -> None:
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            text(
+                "INSERT OR REPLACE INTO file_expiry (filename, expires_at, downloaded_at) "
+                "VALUES (:fn, :exp, :dl)"
+            ),
+            {"fn": filename, "exp": expires_at, "dl": downloaded_at},
+        )
+        await s.commit()
+
+
+async def get_all_expiries() -> dict[str, str]:
+    """Returns {filename: expires_at} for all tracked files."""
+    async with AsyncSessionLocal() as s:
+        rows = await s.execute(text("SELECT filename, expires_at FROM file_expiry"))
+        return {r.filename: r.expires_at for r in rows}
+
+
+async def extend_file_expiry(filename: str, new_expires_at: str) -> bool:
+    async with AsyncSessionLocal() as s:
+        result = await s.execute(
+            text("UPDATE file_expiry SET expires_at = :exp WHERE filename = :fn"),
+            {"exp": new_expires_at, "fn": filename},
+        )
+        await s.commit()
+        return result.rowcount > 0
+
+
+async def delete_file_expiry(filename: str) -> None:
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            text("DELETE FROM file_expiry WHERE filename = :fn"), {"fn": filename}
+        )
+        await s.commit()
 
 
 async def get_recent_logs(limit: int = 200) -> list[dict]:

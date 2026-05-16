@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from services import job_manager, stats_service, file_service
+from services import job_manager, stats_service, file_service, db
 from routers.fetch import _job_dict
 
 router = APIRouter(tags=["events"])
@@ -19,7 +19,10 @@ async def sse(request: Request):
                 break
             jobs = [_job_dict(j) for j in job_manager.list_live_jobs()]
             stats = await stats_service.get_system_stats()
+            expiries = await db.get_all_expiries()
             files = [f.__dict__ for f in file_service.list_files()]
+            for f in files:
+                f["expires_at"] = expiries.get(f["filename"])
             payload = json.dumps({
                 "jobs": jobs,
                 "stats": {

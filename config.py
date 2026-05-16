@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     MAX_CONCURRENT: int = 3
     DEFAULT_CONNECTIONS: int = 16
     MAX_FILE_SIZE_GB: float = 0
-    FILE_TTL_HOURS: int = 5
+    FILE_TTL_DEFAULT_HOURS: int = 5
+    FILE_TTL_MAX_HOURS: int = 12
 
     # aria2
     ARIA2_HOST: str = "http://localhost"

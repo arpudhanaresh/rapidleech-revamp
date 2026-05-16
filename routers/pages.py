@@ -17,7 +17,7 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {
         "request": request,
         "stats": stats,
-        "ttl_hours": settings.FILE_TTL_HOURS,
+        "ttl_max_hours": settings.FILE_TTL_MAX_HOURS,
     })
 
 

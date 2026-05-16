@@ -36,13 +36,14 @@ Download files at full datacenter speed directly to your server, then pull them 
 - [Performance Tuning](#performance-tuning)
 - [Troubleshooting](#troubleshooting)
 - [Security](#security)
+- [Inspired By](#inspired-by)
 - [Contributing](#contributing)
 
 ---
 
 ## Overview
 
-RapidLeech-Py is a Python rewrite of the classic RapidLeech PHP downloader. It runs as a lightweight FastAPI server with a reactive Alpine.js frontend. All downloads happen on the server side — useful when you have a fast server (e.g. AWS EC2, VPS) and want to pull files locally later.
+RapidLeech-Py is a Python rewrite inspired by the classic [Th3-822/rapidleech](https://github.com/Th3-822/rapidleech) PHP leeching script. It runs as a lightweight FastAPI server with a reactive Alpine.js frontend. All downloads happen on the server side — useful when you have a fast server (e.g. AWS EC2, VPS) and want to pull files locally later.
 
 ```
 Browser  ──→  RapidLeech (FastAPI)  ──→  Internet
@@ -518,6 +519,35 @@ RapidLeech is intended to run as a **private, single-user tool**. The following 
 - **Filename sanitisation** — path traversal sequences and illegal characters stripped
 - **Security headers** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options on every response
 - **Path traversal** — folder file downloads are jail-checked with `os.path.realpath`
+
+---
+
+## Inspired By
+
+RapidLeech-Py is a full rewrite inspired by the original **[Th3-822/rapidleech](https://github.com/Th3-822/rapidleech)** — a PHP-based leeching script that allowed servers to fetch files from 127+ premium file-hosting services (uploaded.net, Rapidgator, etc.) and serve them to end-users. At its peak it ran on 2,000+ servers and had 5 million+ users.
+
+### Why a rewrite?
+
+The original project is **officially unmaintained** and the repository is locked (issues and PRs disabled due to abuse). Its own README warns:
+
+> *"This is no longer maintained. The code may contain insecure code/validations."*
+
+Beyond maintenance, the architecture has fundamental limitations that a modern rewrite addresses:
+
+| Limitation | Original RapidLeech (PHP) | RapidLeech-Py |
+|---|---|---|
+| **Maintenance** | Abandoned; no updates | Actively developed |
+| **Security** | Self-described as potentially insecure | SSRF protection, rate limiting, abuse detection, sanitised inputs |
+| **Real-time progress** | None — page reload required | Live SSE stream: speed, ETA, chunk map, seeders |
+| **Torrent support** | Not supported | Magnet links + `.torrent` files via libtorrent |
+| **Media sites** | Not supported | 1000+ sites via yt-dlp (YouTube, TikTok, Twitter, etc.) |
+| **Job persistence** | None — page refresh loses all state | SQLite/PostgreSQL/MySQL; survives restarts |
+| **Containerisation** | Manual PHP server setup | One-line Docker deploy; official image on Docker Hub |
+| **API** | No REST API | Full JSON REST API with OpenAPI docs |
+| **Database** | None — flat files | Multi-DB: SQLite (default), PostgreSQL, MySQL |
+| **Async downloads** | Blocking PHP execution | Fully async FastAPI; concurrent downloads |
+| **Adding new sources** | Write a PHP plugin per host | Any URL works; yt-dlp handles 1000+ sites automatically |
+| **File manager** | Basic | Browse torrent folders, ZIP download with progress, per-file TTL |
 
 ---
 

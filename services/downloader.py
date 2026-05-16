@@ -237,6 +237,9 @@ def _aria2_progress(job_id: str, dl) -> None:
 
 async def _post_download(job_id: str) -> None:
     """SHA-256 hash + optional ClamAV scan after download completes."""
+    from datetime import datetime, timezone, timedelta
+    from services import db as _db
+
     job = job_manager.get_job(job_id)
     if not job or job.status != "done" or not job.filename:
         await job_manager.finish_job(job_id)
@@ -245,6 +248,12 @@ async def _post_download(job_id: str) -> None:
     filepath = os.path.join(settings.DOWNLOAD_DIR, job.filename)
     # Directories (multi-file torrents) are not hashed
     if not os.path.exists(filepath) or not os.path.isfile(filepath):
+        now = datetime.now(timezone.utc)
+        await _db.set_file_expiry(
+            job.filename,
+            (now + timedelta(hours=settings.FILE_TTL_DEFAULT_HOURS)).isoformat(),
+            now.isoformat(),
+        )
         await job_manager.finish_job(job_id)
         return
 
@@ -259,6 +268,12 @@ async def _post_download(job_id: str) -> None:
         result = await asyncio.to_thread(_clam_scan, filepath)
         job_manager.update_job(job_id, scan_result=result, status="done")
 
+    now = datetime.now(timezone.utc)
+    await _db.set_file_expiry(
+        job.filename,
+        (now + timedelta(hours=settings.FILE_TTL_DEFAULT_HOURS)).isoformat(),
+        now.isoformat(),
+    )
     await job_manager.finish_job(job_id)
 
 
