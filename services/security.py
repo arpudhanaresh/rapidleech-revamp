@@ -50,7 +50,7 @@ async def validate_and_resolve(url: str) -> str:
     if scheme == "magnet":
         return url  # magnet URIs don't involve HTTP connections from the server
 
-    if len(url) > 2048:
+    if len(url) > 8192:
         raise SecurityError("URL exceeds maximum length")
 
     if scheme not in ALLOWED_SCHEMES:

@@ -88,7 +88,7 @@
               'border-green-600': job.status==='done',
               'border-red-600': job.status==='error',
               'border-amber-600 border-dashed': job.status==='paused',
-              'border-[#222]': !['downloading','done','error','paused'].includes(job.status)
+              'border-[#222]': !['downloading','done','error','paused','checking'].includes(job.status)
             }">
             <!-- Row 1: URL + badges -->
             <div class="flex items-center gap-2 flex-wrap">
@@ -101,6 +101,7 @@
                   'bg-red-500/20 text-red-300 border border-red-600': job.status==='error',
                   'bg-orange-500/20 text-orange-300 border border-orange-600': job.status==='paused',
                   'bg-gray-500/20 text-gray-400 border border-gray-600': job.status==='queued',
+                  'bg-blue-500/20 text-blue-300 border border-blue-600': job.status==='checking',
                 }"
                 x-text="statusLabel(job)"></span>
               <span x-show="job.connections>0" class="text-[10px] text-gray-500" x-text="`×${job.connections}`"></span>
@@ -815,7 +816,7 @@ function app() {
     },
 
     statusLabel(job) {
-      const icons = { downloading:'⬇', done:'✓', error:'✕', paused:'⏸', queued:'⏳', scanning:'🛡', metadata:'🔍' };
+      const icons = { downloading:'⬇', done:'✓', error:'✕', paused:'⏸', queued:'⏳', scanning:'🛡', metadata:'🔍', checking:'🔎' };
       return `${icons[job.status]||'?'} ${job.status.toUpperCase()}`;
     },
 

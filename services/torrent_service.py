@@ -256,6 +256,11 @@ def _run_alert_loop(job_id: str, sess, handle, files: list[TorrentFile]) -> int:
             job_manager.update_job(job_id, status="done", percent=100.0)
             return st.all_time_upload
 
+        # Skip stall detection while libtorrent is verifying existing pieces
+        if st.state in _checking_states():
+            time.sleep(1)
+            continue
+
         last_done, last_progress, stalled = _check_stall(job_id, st, last_done, last_progress)
         if stalled:
             return 0
@@ -271,12 +276,30 @@ def _handle_alert(job_id: str, alert, files: list[TorrentFile]) -> None:
             job_manager.update_job(job_id, files=files)
 
 
+_CHECKING_STATES = None  # resolved lazily after lt is confirmed available
+
+
+def _checking_states():
+    global _CHECKING_STATES
+    if _CHECKING_STATES is None:
+        _CHECKING_STATES = {
+            lt.torrent_status.checking_files,
+            lt.torrent_status.checking_resume_data,
+        }
+    return _CHECKING_STATES
+
+
 def _update_torrent_status(job_id: str, st, files: list[TorrentFile], handle) -> None:
     total = st.total_wanted or 1
     done = st.total_wanted_done
     pct = min(done / total * 100, 99.9) if st.state != lt.torrent_status.seeding else 100.0
     mbps = st.download_rate / (1024 * 1024)
     eta_s = int((total - done) / st.download_rate) if st.download_rate > 0 else 0
+
+    if st.state in _checking_states():
+        check_pct = st.progress * 100 if hasattr(st, "progress") else 0
+        job_manager.update_job(job_id, status="checking", percent=round(check_pct, 1))
+        return
 
     # Update per-file progress from piece map
     if handle.status().has_metadata:
