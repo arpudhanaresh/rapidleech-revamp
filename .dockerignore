@@ -1,0 +1,12 @@
+.git
+.env
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+downloads/
+data/
+*.db
+.DS_Store
+Thumbs.db

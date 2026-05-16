@@ -1,0 +1,65 @@
+services:
+
+  # ── RapidLeech (required) ────────────────────────────────────────────────
+  rapidleech:
+    build: .
+    image: arpudhanaresh/rapidleech:latest
+    container_name: rapidleech
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:8000"
+      - "${BT_PORT:-6881}:6881/tcp"
+      - "${BT_PORT:-6881}:6881/udp"
+    environment:
+      - PORT=8000
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DOWNLOAD_DIR=/app/downloads
+      - MAX_CONCURRENT=${MAX_CONCURRENT:-3}
+      - DEFAULT_CONNECTIONS=${DEFAULT_CONNECTIONS:-16}
+      - FILE_TTL_HOURS=${FILE_TTL_HOURS:-5}
+      - ARIA2_HOST=http://localhost       # aria2c runs inside the same container
+      - ARIA2_PORT=6800
+      - ARIA2_RPC_SECRET=${ARIA2_RPC_SECRET:-}
+      - RATE_LIMIT_FETCH=${RATE_LIMIT_FETCH:-5/minute}
+      - CLAM_SOCKET=${CLAM_SOCKET:-}
+      # Uncomment to use PostgreSQL (see postgres service below):
+      # - DATABASE_URL=postgresql+asyncpg://rapidleech:rapidleech@postgres:5432/rapidleech
+      # Uncomment to use the external MySQL:
+      # - DATABASE_URL=mysql+aiomysql://user:pass@host:3306/dbname
+    volumes:
+      - downloads:/app/downloads         # persisted download files
+      - db_data:/app/data                # persisted SQLite DB (ignored if using PostgreSQL)
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false                  # optional — remove this block to skip postgres
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── PostgreSQL (optional — comment out if using SQLite) ───────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: rapidleech-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]              # only started with: docker compose --profile postgres up
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rapidleech}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-rapidleech}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rapidleech"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  downloads:
+  db_data:
+  pg_data:

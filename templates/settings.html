@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Usage — RapidLeech-Py</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:ui-monospace,'Cascadia Code','Fira Code','JetBrains Mono',monospace}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:#0d0d0d}
+    ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}
+  </style>
+</head>
+<body class="bg-[#090909] text-gray-200 min-h-screen">
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-30 bg-[#0d0d0d]/95 backdrop-blur border-b border-[#1e1e1e] px-6 py-3">
+    <div class="max-w-3xl mx-auto flex items-center justify-between">
+      <a href="/" class="text-[#00e5ff] font-bold text-lg tracking-tight hover:opacity-80 transition-opacity">
+        ⚡ RapidLeech-Py
+      </a>
+      <a href="/" class="text-gray-400 hover:text-[#00e5ff] transition-colors text-sm">← Dashboard</a>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+
+    <h1 class="text-[#00e5ff] text-xs font-bold uppercase tracking-widest">Usage Statistics</h1>
+
+    <!-- DATA TRANSFER ─────────────────────────────────────────────── -->
+    <section class="grid grid-cols-2 gap-4">
+
+      <div class="bg-[#111] border border-[#222] rounded-2xl p-6 space-y-1">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider">Total Downloaded</div>
+        <div class="text-3xl font-bold text-[#00e5ff]">
+          {% set dl = agg.total_downloaded_bytes or 0 %}
+          {% if dl >= 1099511627776 %}
+            {{ "%.2f"|format(dl / 1099511627776) }} <span class="text-lg text-gray-400">TiB</span>
+          {% elif dl >= 1073741824 %}
+            {{ "%.2f"|format(dl / 1073741824) }} <span class="text-lg text-gray-400">GiB</span>
+          {% elif dl >= 1048576 %}
+            {{ "%.1f"|format(dl / 1048576) }} <span class="text-lg text-gray-400">MiB</span>
+          {% else %}
+            {{ "%.1f"|format(dl / 1024) }} <span class="text-lg text-gray-400">KiB</span>
+          {% endif %}
+        </div>
+        <div class="text-[11px] text-gray-600">{{ "{:,}".format(dl) }} bytes</div>
+      </div>
+
+      <div class="bg-[#111] border border-[#222] rounded-2xl p-6 space-y-1">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider">Total Uploaded</div>
+        <div class="text-3xl font-bold text-purple-400">
+          {% set ul = agg.total_uploaded_bytes or 0 %}
+          {% if ul >= 1099511627776 %}
+            {{ "%.2f"|format(ul / 1099511627776) }} <span class="text-lg text-gray-400">TiB</span>
+          {% elif ul >= 1073741824 %}
+            {{ "%.2f"|format(ul / 1073741824) }} <span class="text-lg text-gray-400">GiB</span>
+          {% elif ul >= 1048576 %}
+            {{ "%.1f"|format(ul / 1048576) }} <span class="text-lg text-gray-400">MiB</span>
+          {% elif ul > 0 %}
+            {{ "%.1f"|format(ul / 1024) }} <span class="text-lg text-gray-400">KiB</span>
+          {% else %}
+            <span class="text-lg text-gray-600">—</span>
+          {% endif %}
+        </div>
+        <div class="text-[11px] text-gray-600">files served + torrent seeding</div>
+      </div>
+
+    </section>
+
+    <!-- JOB COUNTS ──────────────────────────────────────────────── -->
+    <section class="grid grid-cols-3 gap-4">
+
+      <div class="bg-[#111] border border-[#222] rounded-2xl p-5 text-center">
+        <div class="text-2xl font-bold text-green-400">{{ agg.total_jobs_completed or 0 }}</div>
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Completed</div>
+      </div>
+
+      <div class="bg-[#111] border border-[#222] rounded-2xl p-5 text-center">
+        <div class="text-2xl font-bold text-red-400">{{ agg.total_jobs_failed or 0 }}</div>
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Failed</div>
+      </div>
+
+      <div class="bg-[#111] border border-[#222] rounded-2xl p-5 text-center">
+        <div class="text-2xl font-bold text-amber-400">{{ agg.jobs_today or 0 }}</div>
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Today</div>
+      </div>
+
+    </section>
+
+    <!-- DISK ────────────────────────────────────────────────────── -->
+    <section class="bg-[#111] border border-[#222] rounded-2xl p-5 space-y-3">
+      <div class="text-[10px] text-gray-500 uppercase tracking-wider">💾 Disk</div>
+      <div class="flex items-center gap-4">
+        <div class="flex-1">
+          <div class="h-3 bg-[#1a1a1a] rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500
+              {% if stats.disk_percent > 90 %}bg-red-500
+              {% elif stats.disk_percent > 70 %}bg-amber-500
+              {% else %}bg-green-500{% endif %}"
+              style="width: {{ stats.disk_percent }}%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-gray-500 mt-1.5">
+            <span>{{ stats.disk_used_gb }} GiB used</span>
+            <span>{{ stats.disk_free_gb }} GiB free of {{ stats.disk_total_gb }} GiB</span>
+          </div>
+        </div>
+        <div class="text-2xl font-bold shrink-0
+          {% if stats.disk_percent > 90 %}text-red-400
+          {% elif stats.disk_percent > 70 %}text-amber-400
+          {% else %}text-green-400{% endif %}">
+          {{ stats.disk_percent }}%
+        </div>
+      </div>
+    </section>
+
+    <!-- YOUTUBE COOKIES ─────────────────────────────────────────── -->
+    <section class="bg-[#111] border border-[#222] rounded-2xl p-5 space-y-3" x-data="cookiesMgr()">
+      <div class="flex items-center justify-between">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider">▶ YouTube Cookies</div>
+        <span x-show="loaded" class="text-[10px] text-green-400 font-bold">✓ Active</span>
+        <span x-show="!loaded" class="text-[10px] text-gray-600">Not set</span>
+      </div>
+      <p class="text-[11px] text-gray-500">
+        YouTube blocks downloads from server IPs. Export your browser cookies using
+        <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" class="text-[#00e5ff] hover:underline">Get cookies.txt Locally</a>
+        (Chrome) or
+        <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" class="text-[#00e5ff] hover:underline">cookies.txt</a>
+        (Firefox), then upload the file here.
+      </p>
+      <div class="flex gap-3 items-center flex-wrap">
+        <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d0d0d] border border-[#333] hover:border-[#555] cursor-pointer transition-colors text-sm text-gray-400 hover:text-gray-200">
+          📄 Upload cookies.txt
+          <input type="file" accept=".txt,text/plain" class="hidden" @change="upload($event)">
+        </label>
+        <button x-show="loaded" @click="remove()"
+          class="px-4 py-2 rounded-xl bg-red-900/30 hover:bg-red-700/50 text-red-400 text-sm border border-red-800 transition-colors">
+          🗑 Remove
+        </button>
+        <span x-show="msg" x-text="msg" class="text-xs" :class="ok ? 'text-green-400' : 'text-red-400'"></span>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="text-center text-gray-700 text-xs py-6">
+    RapidLeech-Py — Powered by yt-dlp, aria2 &amp; libtorrent
+  </footer>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14/dist/cdn.min.js"></script>
+<script>
+function cookiesMgr() {
+  return {
+    loaded: false, msg: '', ok: true,
+    async init() {
+      const r = await fetch('/api/cookies/status');
+      const d = await r.json();
+      this.loaded = d.exists;
+    },
+    async upload(e) {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const form = new FormData();
+      form.append('file', file);
+      const r = await fetch('/api/cookies/upload', { method: 'POST', body: form });
+      this.ok = r.ok;
+      this.msg = r.ok ? 'Cookies uploaded — YouTube downloads will now use them.' : 'Upload failed.';
+      if (r.ok) this.loaded = true;
+      setTimeout(() => this.msg = '', 4000);
+    },
+    async remove() {
+      await fetch('/api/cookies', { method: 'DELETE' });
+      this.loaded = false;
+      this.ok = true;
+      this.msg = 'Cookies removed.';
+      setTimeout(() => this.msg = '', 3000);
+    },
+  };
+}
+</script>
+</body>
+</html>

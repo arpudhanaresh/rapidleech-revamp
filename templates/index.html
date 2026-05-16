@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RapidLeech-Py</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%2300e5ff' d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak]{display:none!important}
+    body{font-family:ui-monospace,'Cascadia Code','Fira Code','JetBrains Mono',monospace}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:#0d0d0d}
+    ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}
+    @keyframes glow{0%,100%{box-shadow:0 0 6px rgba(0,229,255,.25)}50%{box-shadow:0 0 20px rgba(0,229,255,.6)}}
+    @keyframes slide-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+    .card-glow{animation:glow 2.5s ease-in-out infinite}
+    .slide-in{animation:slide-in .25s ease-out}
+    .progress-bar{transition:width .4s ease}
+  </style>
+</head>
+<body class="bg-[#090909] text-gray-200 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+
+  <!-- ── Confirm dialog ──────────────────────────────────────────── -->
+  <div x-show="confirm.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition>
+    <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl slide-in">
+      <p class="text-gray-200 mb-2 font-semibold" x-text="confirm.title"></p>
+      <p class="text-gray-400 text-sm mb-6" x-text="confirm.msg"></p>
+      <div class="flex gap-3 justify-end">
+        <button @click="confirm.cb(false)" class="px-4 py-2 rounded-lg bg-[#222] hover:bg-[#2a2a2a] text-gray-400 text-sm transition-colors">Cancel</button>
+        <button @click="confirm.cb(true)" class="px-4 py-2 rounded-lg text-sm transition-colors"
+          :class="confirm.danger ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-[#00e5ff] hover:bg-cyan-300 text-black font-bold'"
+          x-text="confirm.action || 'Confirm'"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast ───────────────────────────────────────────────────── -->
+  <div class="fixed top-4 right-4 z-40 flex flex-col gap-2">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="px-4 py-3 rounded-xl text-sm font-mono shadow-lg slide-in flex items-center gap-2"
+        :class="t.type==='error' ? 'bg-red-900/90 text-red-200 border border-red-700' : t.type==='warn' ? 'bg-amber-900/90 text-amber-200 border border-amber-700' : 'bg-[#0d2a1a] text-green-300 border border-green-700'">
+        <span x-text="t.type==='error' ? '✕' : t.type==='warn' ? '⚠' : '✓'"></span>
+        <span x-text="t.msg"></span>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-30 bg-[#0d0d0d]/95 backdrop-blur border-b border-[#1e1e1e] px-6 py-3">
+    <div class="max-w-5xl mx-auto flex items-center justify-between gap-4">
+      <a href="/" class="text-[#00e5ff] font-bold text-lg tracking-tight hover:opacity-80 transition-opacity">
+        ⚡ RapidLeech-Py
+      </a>
+      <div class="flex items-center gap-5 text-xs">
+        <span class="text-amber-400">⬇ <span x-text="stats.active_jobs ?? 0"></span> active</span>
+        <span class="text-[#00e5ff]">⚡ <span x-text="(stats.current_speed_mbps ?? 0).toFixed(1)"></span> MB/s</span>
+        <span class="text-green-400">✓ <span x-text="stats.jobs_today ?? 0"></span> today</span>
+        <span class="text-purple-400 hidden sm:inline">💾 <span x-text="(stats.disk_free_gb ?? 0).toFixed(1)"></span> GB free</span>
+        <div class="w-20 h-1.5 bg-[#222] rounded-full overflow-hidden hidden sm:block" title="Disk usage">
+          <div class="h-full rounded-full transition-all duration-500"
+            :class="(stats.disk_percent??0)>90?'bg-red-500':(stats.disk_percent??0)>70?'bg-amber-500':'bg-green-500'"
+            :style="`width:${stats.disk_percent??0}%`"></div>
+        </div>
+      </div>
+      <a href="/settings" class="text-gray-400 hover:text-[#00e5ff] transition-colors text-lg" title="Settings">⚙</a>
+    </div>
+  </header>
+
+  <!-- ── Main ────────────────────────────────────────────────────── -->
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- ACTIVE DOWNLOADS -->
+    <section>
+      <h2 class="text-[#00e5ff] text-xs font-bold uppercase tracking-widest mb-4">Active Downloads</h2>
+      <div class="space-y-3">
+        <template x-if="jobs.length === 0">
+          <div class="text-center py-14 text-gray-600">
+            <div class="text-5xl mb-3">📥</div>
+            <div class="text-sm italic">No active downloads — paste a link below to get started</div>
+          </div>
+        </template>
+        <template x-for="job in jobs" :key="job.job_id">
+          <div class="bg-[#111] border rounded-xl p-4 space-y-3 transition-all duration-300"
+            :class="{
+              'border-[#00e5ff] card-glow': job.status==='downloading',
+              'border-green-600': job.status==='done',
+              'border-red-600': job.status==='error',
+              'border-amber-600 border-dashed': job.status==='paused',
+              'border-[#222]': !['downloading','done','error','paused','hashing'].includes(job.status)
+            }">
+            <!-- Row 1: URL + badges -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-gray-300 text-xs flex-1 truncate" x-text="job.torrent_name || job.url"></span>
+              <span x-show="job.job_type==='torrent'" class="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] border border-blue-700">TORRENT</span>
+              <span class="px-2 py-1 rounded-full text-[11px] font-bold uppercase"
+                :class="{
+                  'bg-amber-500/20 text-amber-300 border border-amber-600': job.status==='downloading',
+                  'bg-green-500/20 text-green-300 border border-green-600': job.status==='done',
+                  'bg-red-500/20 text-red-300 border border-red-600': job.status==='error',
+                  'bg-orange-500/20 text-orange-300 border border-orange-600': job.status==='paused',
+                  'bg-gray-500/20 text-gray-400 border border-gray-600': job.status==='queued',
+                  'bg-purple-500/20 text-purple-300 border border-purple-600': job.status==='hashing',
+                }"
+                x-text="statusLabel(job)"></span>
+              <span x-show="job.connections>0" class="text-[10px] text-gray-500" x-text="`×${job.connections}`"></span>
+            </div>
+            <!-- Progress bar -->
+            <div class="relative h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+              <div class="absolute inset-y-0 left-0 rounded-full progress-bar"
+                :class="job.status==='downloading'?'bg-[#00e5ff]':job.status==='done'?'bg-green-500':job.status==='error'?'bg-red-500':'bg-gray-500'"
+                :style="`width:${job.percent}%`"></div>
+            </div>
+            <!-- Chunk map (shows individual connection activity) -->
+            <div x-show="job.chunks && job.chunks.length>1" class="flex gap-px h-1">
+              <template x-for="c in job.chunks" :key="c.index">
+                <div class="flex-1 rounded-full transition-all duration-200"
+                  :class="c.done?'bg-green-500':(c.downloaded>0?'bg-[#00e5ff]':'bg-[#222]')"></div>
+              </template>
+            </div>
+            <!-- Stats -->
+            <div class="flex flex-wrap gap-2">
+              <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                <div class="text-[9px] text-gray-500 uppercase">Speed</div>
+                <div class="text-[#00e5ff] text-sm font-bold" x-text="job.speed||'—'"></div>
+              </div>
+              <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                <div class="text-[9px] text-gray-500 uppercase">ETA</div>
+                <div class="text-gray-200 text-sm font-bold" x-text="job.eta||'—'"></div>
+              </div>
+              <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                <div class="text-[9px] text-gray-500 uppercase">Size</div>
+                <div class="text-gray-200 text-sm font-bold" x-text="job.size||'—'"></div>
+              </div>
+              <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                <div class="text-[9px] text-gray-500 uppercase">Done</div>
+                <div class="text-gray-200 text-sm font-bold" x-text="`${job.percent.toFixed(1)}%`"></div>
+              </div>
+              <div x-show="job.downloaded_bytes > 0" class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                <div class="text-[9px] text-gray-500 uppercase">Downloaded</div>
+                <div class="text-amber-400 text-sm font-bold" x-text="fmtBytes(job.downloaded_bytes)"></div>
+              </div>
+              <template x-if="job.job_type==='torrent'">
+                <div class="flex gap-2">
+                  <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                    <div class="text-[9px] text-gray-500 uppercase">Seeds</div>
+                    <div class="text-green-400 text-sm font-bold" x-text="job.seeders"></div>
+                  </div>
+                  <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                    <div class="text-[9px] text-gray-500 uppercase">Peers</div>
+                    <div class="text-blue-400 text-sm font-bold" x-text="job.peers"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <!-- Done result row -->
+            <div x-show="job.status==='done' && job.filename" class="flex items-center gap-3 flex-wrap">
+              <span class="text-green-400">✓</span>
+              <span class="text-green-400 text-xs" x-text="job.filename"></span>
+              <a :href="`/api/files/download/${encodeURIComponent(job.filename)}`"
+                class="px-3 py-1 rounded-lg bg-green-700/30 hover:bg-green-700/50 text-green-300 text-xs border border-green-700 transition-colors">
+                ⬇ Download
+              </a>
+              <button x-show="job.sha256" @click="copyText(job.sha256)"
+                class="px-3 py-1 rounded-lg bg-[#1a1a1a] hover:bg-[#222] text-gray-400 text-xs border border-[#333] transition-colors">
+                ⧉ SHA256
+              </button>
+              <span x-show="job.scan_result"
+                :class="job.scan_result==='clean'?'text-green-400':'text-red-400'"
+                class="text-xs" x-text="job.scan_result==='clean'?'✓ Clean':'⚠ '+job.scan_result"></span>
+            </div>
+            <!-- Error row -->
+            <div x-show="job.status==='error'" class="text-red-400 text-xs">
+              ✕ <span x-text="job.error||'Unknown error'"></span>
+            </div>
+            <!-- Controls -->
+            <div x-show="['downloading','paused','queued'].includes(job.status)" class="flex gap-2">
+              <button x-show="job.status==='downloading'"
+                @click="pauseJob(job.job_id)"
+                class="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-xs border border-amber-700 transition-colors">
+                ⏸ Pause
+              </button>
+              <button x-show="job.status==='paused'"
+                @click="resumeJob(job.job_id)"
+                class="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 text-xs border border-cyan-700 transition-colors">
+                ▶ Resume
+              </button>
+              <button @click="cancelJob(job.job_id)"
+                class="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs border border-red-700 transition-colors">
+                ✕ Cancel
+              </button>
+            </div>
+            <!-- Torrent file list -->
+            <div x-show="job.job_type==='torrent' && job.files && job.files.length>0">
+              <details class="group">
+                <summary class="cursor-pointer text-gray-500 text-xs hover:text-gray-300 transition-colors select-none">
+                  ▸ Files (<span x-text="job.files.length"></span>)
+                </summary>
+                <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                  <template x-for="f in job.files" :key="f.index">
+                    <div class="flex items-center gap-2 text-xs py-1">
+                      <span class="text-gray-400 flex-1 truncate" x-text="f.path"></span>
+                      <span class="text-gray-500" x-text="`${f.size_mb.toFixed(1)} MB`"></span>
+                      <div class="w-16 h-1 bg-[#222] rounded-full overflow-hidden">
+                        <div class="h-full bg-[#00e5ff] rounded-full" :style="`width:${f.percent}%`"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </details>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD SECTION -->
+    <section class="bg-[#111] border border-[#222] rounded-2xl p-6 space-y-4">
+      <h2 class="text-[#00e5ff] text-xs font-bold uppercase tracking-widest">Download</h2>
+
+      <!-- URL input -->
+      <div class="flex gap-3 items-start">
+        <div class="flex-1">
+          <input x-model="url" @keydown.enter="submitUrl()"
+            placeholder="https://example.com/file.zip  or  magnet:?xt=urn:btih:..."
+            class="w-full bg-[#0d0d0d] border border-[#333] focus:border-[#00e5ff] rounded-xl px-4 py-3 text-sm text-gray-200 outline-none transition-colors placeholder-gray-600" />
+          <div x-show="urlType" class="mt-1 text-[10px] font-bold" :class="urlTypeColor" x-text="urlType"></div>
+        </div>
+        <button @click="submitUrl()" :disabled="!url.trim() || submitting"
+          class="px-6 py-3 rounded-xl font-bold text-black text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          :class="submitting ? 'bg-gray-500' : 'bg-[#00e5ff] hover:bg-cyan-300 active:scale-95'">
+          <span x-text="submitting ? '...' : '⚡ Fetch'"></span>
+        </button>
+      </div>
+
+      <!-- Torrent upload -->
+      <div class="flex items-center gap-4">
+        <span class="text-gray-600 text-xs">or</span>
+        <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d0d0d] border border-[#333] hover:border-[#555] cursor-pointer transition-colors text-sm text-gray-400 hover:text-gray-200">
+          📦 Upload .torrent
+          <input type="file" accept=".torrent" class="hidden" @change="uploadTorrent($event)">
+        </label>
+      </div>
+    </section>
+
+    <!-- TORRENT FILE PICKER MODAL -->
+    <div x-show="torrentPicker.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition>
+      <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col slide-in">
+        <h3 class="text-[#00e5ff] font-bold mb-1">Select files to download</h3>
+        <p class="text-gray-500 text-xs mb-4" x-text="torrentPicker.name"></p>
+        <div class="flex-1 overflow-y-auto space-y-1 mb-4">
+          <label class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-200 cursor-pointer pb-2 border-b border-[#222]">
+            <input type="checkbox" x-model="torrentPicker.all" @change="toggleAllFiles()" class="accent-[#00e5ff]">
+            Select all
+          </label>
+          <template x-for="f in torrentPicker.files" :key="f.index">
+            <label :aria-label="f.path" class="flex items-center gap-2 text-xs cursor-pointer hover:bg-[#1a1a1a] px-2 py-1.5 rounded-lg">
+              <input type="checkbox" :value="f.index" x-model="torrentPicker.selected" class="accent-[#00e5ff]">
+              <span class="flex-1 truncate text-gray-300" x-text="f.path"></span>
+              <span class="text-gray-500 shrink-0" x-text="`${f.size_mb.toFixed(1)} MB`"></span>
+            </label>
+          </template>
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button @click="torrentPicker.show=false" class="px-4 py-2 rounded-lg bg-[#222] hover:bg-[#2a2a2a] text-gray-400 text-sm transition-colors">Cancel</button>
+          <button @click="startTorrent()" :disabled="torrentPicker.selected.length===0"
+            class="px-4 py-2 rounded-lg bg-[#00e5ff] hover:bg-cyan-300 text-black font-bold text-sm transition-colors disabled:opacity-40">
+            ⬇ Download (<span x-text="torrentPicker.selected.length"></span>)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- YT FORMAT PICKER MODAL ─────────────────────────────────── -->
+    <div x-show="ytPicker.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition>
+      <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col slide-in">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h3 class="text-[#00e5ff] font-bold">Select Format</h3>
+            <p class="text-gray-500 text-xs mt-0.5 truncate max-w-xs" x-text="ytPicker.url"></p>
+          </div>
+          <button @click="ytPicker.show=false" class="text-gray-600 hover:text-gray-300 text-xl leading-none ml-4">✕</button>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="ytPicker.loading" class="flex-1 flex items-center justify-center py-10 gap-3 text-gray-500 text-sm">
+          <svg class="animate-spin w-5 h-5 text-[#00e5ff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          Fetching available formats…
+        </div>
+
+        <!-- Error -->
+        <div x-show="!ytPicker.loading && ytPicker.error" class="py-4 space-y-3">
+          <p class="text-red-400 text-sm">✕ <span x-text="ytPicker.error"></span></p>
+          <p class="text-gray-500 text-xs">You can still try downloading with the default format.</p>
+        </div>
+
+        <!-- Format list -->
+        <div x-show="!ytPicker.loading && !ytPicker.error" class="flex-1 overflow-y-auto space-y-1 mb-4">
+          <label for="fmt-auto" class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-colors border-2"
+            :class="ytPicker.selected==='__auto__'?'border-[#00e5ff]/40 bg-[#0d1f22]':'border-transparent'">
+            <input type="radio" id="fmt-auto" value="__auto__" x-model="ytPicker.selected" class="accent-[#00e5ff]">
+            <div class="flex-1">
+              <div class="text-white text-sm font-bold">Best (Auto)</div>
+              <div class="text-gray-500 text-[10px]">highest quality — recommended</div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] bg-[#00e5ff]/20 text-[#00e5ff] border border-[#00e5ff]/30">AUTO</span>
+          </label>
+          <template x-for="f in ytPicker.formats" :key="f.format_id">
+            <label :for="'fmt-'+f.format_id" :aria-label="f.label" class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-colors border-2"
+              :class="ytPicker.selected===f.format_id?'border-[#00e5ff]/40 bg-[#0d1f22]':'border-transparent'">
+              <input type="radio" :id="'fmt-'+f.format_id" :value="f.format_id" x-model="ytPicker.selected" class="accent-[#00e5ff]">
+              <div class="flex-1 min-w-0">
+                <div class="text-white text-sm font-semibold" x-text="f.label"></div>
+                <div class="text-gray-500 text-[10px]" x-text="f.size_str !== '?' ? f.size_str : 'Size unknown'"></div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] border shrink-0"
+                :class="f.has_video && f.has_audio ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-purple-900/40 text-purple-400 border-purple-800'"
+                x-text="f.has_video && f.has_audio ? 'VIDEO+AUDIO' : 'AUDIO ONLY'">
+              </span>
+            </label>
+          </template>
+        </div>
+
+        <div class="flex gap-3 justify-end pt-3 border-t border-[#222]" x-show="!ytPicker.loading">
+          <button @click="ytPicker.show=false" class="px-4 py-2 rounded-lg bg-[#222] hover:bg-[#2a2a2a] text-gray-400 text-sm transition-colors">Cancel</button>
+          <button @click="startYtDownload()"
+            class="px-4 py-2 rounded-lg bg-[#00e5ff] hover:bg-cyan-300 text-black font-bold text-sm transition-colors">
+            ⬇ Download
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOLDER BROWSER MODAL -->
+    <div x-show="folderModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition style="display:none">
+      <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col slide-in">
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex-1 min-w-0">
+            <h3 class="text-[#00e5ff] font-bold text-sm flex items-center gap-2">
+              📁 <span class="truncate" x-text="folderModal.name" :title="folderModal.name"></span>
+            </h3>
+            <p class="text-gray-500 text-xs mt-1"
+              x-text="folderModal.loading ? 'Loading contents…' : `${folderModal.totalFiles} files · ${folderModal.totalSize}`"></p>
+          </div>
+          <button @click="closeFolderModal()" class="text-gray-500 hover:text-white ml-4 text-lg leading-none flex-shrink-0">✕</button>
+        </div>
+
+        <!-- Loading spinner -->
+        <div x-show="folderModal.loading" class="flex-1 flex items-center justify-center py-10">
+          <svg class="animate-spin w-6 h-6 text-[#00e5ff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+
+        <!-- File list -->
+        <div x-show="!folderModal.loading && !folderModal.zipping" class="flex-1 overflow-y-auto mb-4 border border-[#222] rounded-xl min-h-0">
+          <template x-for="f in folderModal.files" :key="f.path">
+            <div class="flex items-center gap-2 px-3 py-2 border-b border-[#1a1a1a] last:border-0 hover:bg-[#1a1a1a] transition-colors group">
+              <span class="text-gray-300 text-xs truncate flex-1 font-mono" x-text="f.path" :title="f.path"></span>
+              <span class="text-gray-500 text-[11px] whitespace-nowrap shrink-0" x-text="f.size"></span>
+              <a :href="`/api/files/dir-file?dirname=${encodeURIComponent(folderModal.name)}&path=${encodeURIComponent(f.path)}`"
+                class="p-1 rounded bg-cyan-900/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors shrink-0" title="Download this file">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </a>
+            </div>
+          </template>
+          <div x-show="folderModal.files.length === 0 && !folderModal.loading" class="text-center py-6 text-gray-600 text-sm italic">No files found</div>
+        </div>
+
+        <!-- ZIP progress -->
+        <div x-show="folderModal.zipping" class="flex-1 flex flex-col items-center justify-center py-8 gap-4">
+          <div class="text-[#00e5ff] text-sm font-semibold animate-pulse">Preparing ZIP…</div>
+          <div class="w-full bg-[#1a1a1a] rounded-full h-3 overflow-hidden">
+            <div class="bg-[#00e5ff] h-3 rounded-full transition-all duration-300"
+              :style="`width:${folderModal.zipTotalFiles > 0 ? Math.round(folderModal.zipFilesDone / folderModal.zipTotalFiles * 100) : 0}%`"></div>
+          </div>
+          <div class="text-gray-400 text-xs">
+            <span x-text="folderModal.zipFilesDone"></span> / <span x-text="folderModal.zipTotalFiles"></span> files
+            (<span x-text="folderModal.zipTotalFiles > 0 ? Math.round(folderModal.zipFilesDone / folderModal.zipTotalFiles * 100) : 0"></span>%)
+          </div>
+          <p class="text-gray-600 text-xs">Download will start automatically when ready</p>
+        </div>
+
+        <!-- Footer -->
+        <div x-show="!folderModal.loading" class="flex gap-3 justify-end pt-3 border-t border-[#222]">
+          <button @click="closeFolderModal()"
+            class="px-4 py-2 rounded-lg bg-[#1a1a1a] hover:bg-[#222] text-gray-400 text-sm transition-colors">
+            Close
+          </button>
+          <button x-show="!folderModal.zipping" @click="startZipDownload()"
+            class="px-4 py-2 rounded-lg bg-[#00e5ff]/20 hover:bg-[#00e5ff]/30 text-[#00e5ff] text-sm border border-[#00e5ff]/40 transition-colors flex items-center gap-2">
+            📦 Download as ZIP
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOWNLOADED FILES -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-[#00e5ff] text-xs font-bold uppercase tracking-widest">Downloaded Files</h2>
+        <button @click="zipAll()" x-show="files.length>0"
+          class="text-xs text-gray-400 hover:text-[#00e5ff] transition-colors">
+          📦 Download All as ZIP
+        </button>
+      </div>
+
+      <template x-if="files.length===0">
+        <div class="text-center py-10 text-gray-600 text-sm italic">No files yet</div>
+      </template>
+
+      <template x-if="files.length>0">
+        <div class="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
+          <!-- Bulk actions -->
+          <div x-show="selectedFiles.length>0" class="flex items-center gap-3 px-4 py-2 bg-[#0d0d0d] border-b border-[#222] text-xs">
+            <span class="text-gray-400"><span x-text="selectedFiles.length"></span> selected</span>
+            <button @click="deleteSelected()" class="text-red-400 hover:text-red-300 transition-colors">✕ Delete</button>
+            <button @click="zipSelected()" class="text-cyan-400 hover:text-cyan-300 transition-colors">📦 ZIP</button>
+            <button @click="selectedFiles=[]" class="text-gray-500 hover:text-gray-300 transition-colors ml-auto">Clear</button>
+          </div>
+          <!-- Table header -->
+          <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-2 border-b border-[#1e1e1e] text-[10px] text-gray-500 uppercase tracking-wider">
+            <input type="checkbox" @change="toggleAllFiles2($event)" class="accent-[#00e5ff]">
+            <span>Filename</span>
+            <span>Size</span>
+            <span>Expires</span>
+            <span>Actions</span>
+          </div>
+          <!-- Rows -->
+          <template x-for="f in files" :key="f.filename">
+            <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-3 border-b border-[#161616] last:border-0 hover:bg-[#141414] transition-colors">
+              <input type="checkbox" :value="f.filename" x-model="selectedFiles" class="accent-[#00e5ff]">
+              <span class="text-gray-200 text-xs truncate flex items-center gap-1" :title="f.filename">
+                <span x-show="f.is_dir" class="text-yellow-400">📁</span>
+                <span x-text="f.filename"></span>
+                <span x-show="f.is_dir" class="text-gray-500 text-[10px]">(ZIP)</span>
+              </span>
+              <span class="text-gray-400 text-xs whitespace-nowrap" x-text="`${f.size_mb} MB`"></span>
+              <span class="text-xs whitespace-nowrap" :class="expiryColor(f)" x-text="expiryText(f)"></span>
+              <div class="flex gap-1">
+                <a :href="f.is_dir ? 'javascript:void(0)' : `/api/files/download/${encodeURIComponent(f.filename)}`"
+                  @click="f.is_dir && ($event.preventDefault(), openFolderModal(f))"
+                  class="p-1.5 rounded bg-cyan-900/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors"
+                  :title="f.is_dir ? 'Browse & download folder' : 'Download'">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </a>
+                <button x-show="!f.is_dir" @click="copyText(`${location.origin}/api/files/download/${encodeURIComponent(f.filename)}`)"
+                  class="p-1.5 rounded bg-[#1a1a1a] hover:bg-[#222] text-gray-400 transition-colors" title="Copy link">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+                <button @click="deleteFile(f.filename)"
+                  class="p-1.5 rounded bg-red-900/30 hover:bg-red-700/50 text-red-400 transition-colors" title="Delete">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </section>
+
+    <!-- ACTIVITY LOG -->
+    <section>
+      <details class="group bg-[#0d0d0d] border border-[#1e1e1e] rounded-xl">
+        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none select-none hover:bg-[#111] transition-colors rounded-xl">
+          <span class="text-gray-400 text-xs uppercase tracking-widest">⌨ Activity Log</span>
+          <span class="text-gray-600 text-xs group-open:rotate-180 transition-transform inline-block">▾</span>
+        </summary>
+        <div class="px-4 pb-4 max-h-52 overflow-y-auto space-y-0.5 font-mono text-[11px]" @click.stop x-init="$el.closest('details').addEventListener('toggle', e => e.target.open && loadLogs())">
+          <template x-for="log in logs" :key="log.id || log.ts">
+            <div :class="logColor(log.level)" x-text="`[${(log.ts||'').slice(0,19).replace('T',' ')}] [${(log.level||'info').toUpperCase().padEnd(8)}] ${log.message}`"></div>
+          </template>
+          <div x-show="!logs.length" class="text-gray-600 italic py-2">No log entries yet.</div>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer class="text-center text-gray-700 text-xs py-6">
+    RapidLeech-Py — Powered by yt-dlp, aria2 &amp; libtorrent
+  </footer>
+
+<script>
+const TTL_HOURS = {{ ttl_hours }};
+
+function app() {
+  return {
+    jobs: [], files: [], stats: {}, logs: [],
+    url: '', urlType: '', urlTypeColor: '',
+    submitting: false,
+    toasts: [],
+    confirm: { show: false, title: '', msg: '', action: '', danger: true, cb: null },
+    selectedFiles: [],
+    torrentPicker: { show: false, jobId: null, name: '', files: [], selected: [], all: false },
+    ytPicker: { show: false, url: '', formats: [], loading: false, error: '', selected: '__auto__' },
+    folderModal: { show: false, loading: false, name: '', totalFiles: 0, totalSize: '', files: [], zipping: false, zipFilesDone: 0, zipTotalFiles: 0, zipJobId: null, _poll: null },
+    _sseSource: null,
+
+    init() {
+      this.connectSSE();
+    },
+
+    connectSSE() {
+      if (this._sseSource) this._sseSource.close();
+      const es = new EventSource('/api/events');
+      es.onmessage = e => {
+        const d = JSON.parse(e.data);
+        this.jobs  = d.jobs  || [];
+        this.stats = d.stats || {};
+        this.files = d.files || [];
+      };
+      es.onerror = () => setTimeout(() => this.connectSSE(), 2000);
+      this._sseSource = es;
+    },
+
+    // URL type detection
+    get urlType() {
+      const v = this.url;
+      if (!v) return '';
+      if (v.startsWith('magnet:')) return '🧲 TORRENT';
+      if (v.toLowerCase().endsWith('.torrent')) return '📦 .TORRENT FILE';
+      const host = (() => { try { return new URL(v).hostname.replace(/^www\./,''); } catch{ return ''; }})();
+      const media = ['youtube.com','youtu.be','twitter.com','x.com','tiktok.com','instagram.com','vimeo.com','twitch.tv'];
+      if (media.some(d => host.endsWith(d))) return '▶ MEDIA (yt-dlp)';
+      return '';
+    },
+    get urlTypeColor() {
+      if (!this.urlType) return '';
+      if (this.urlType.startsWith('🧲') || this.urlType.startsWith('📦')) return 'text-blue-400';
+      if (this.urlType.startsWith('▶')) return 'text-purple-400';
+      return 'text-[#00e5ff]';
+    },
+
+    async submitUrl() {
+      const raw = this.url.trim();
+      if (!raw || this.submitting) return;
+      const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      // Single YouTube URL → show format picker first
+      if (lines.length === 1 && this._isYouTube(lines[0])) {
+        this.url = '';
+        this.submitting = true;
+        await this._fetchYtFormats(lines[0]);
+        this.submitting = false;
+        return;
+      }
+      this.submitting = true;
+      for (const line of lines) await this._doFetch(line);
+      this.url = '';
+      this.submitting = false;
+    },
+
+    _isYouTube(url) {
+      try {
+        const h = new URL(url).hostname.replace(/^www\./, '');
+        return h === 'youtube.com' || h === 'youtu.be';
+      } catch { return false; }
+    },
+
+    async _fetchYtFormats(url) {
+      this.ytPicker = { show: true, url, formats: [], loading: true, error: '', selected: '__auto__' };
+      try {
+        const r = await fetch('/api/ytdlp/formats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const d = await r.json();
+        this.ytPicker.error = d.error || '';
+        this.ytPicker.formats = d.formats || [];
+      } catch {
+        this.ytPicker.error = 'Failed to reach server';
+      }
+      this.ytPicker.loading = false;
+    },
+
+    async startYtDownload() {
+      const { url, selected } = this.ytPicker;
+      this.ytPicker.show = false;
+      this.submitting = true;
+      await this._doFetch(url, selected === '__auto__' ? null : selected);
+      this.submitting = false;
+    },
+
+    async _doFetch(url, format_id = null) {
+      const r = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, format_id }),
+      });
+      const d = await r.json();
+      if (d.error) this.toast(d.error, 'error');
+      else this.toast('Added to queue');
+    },
+
+    async uploadTorrent(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      event.target.value = '';
+      const form = new FormData();
+      form.append('file', file);
+      const r = await fetch('/api/torrent/upload', { method: 'POST', body: form });
+      if (!r.ok) { this.toast('Invalid .torrent file', 'error'); return; }
+      const d = await r.json();
+      if (!d.files || d.files.length === 0) {
+        // No file list — start immediately
+        await fetch(`/api/torrent/${d.job_id}/start`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_indices:null})});
+        this.toast('Torrent added to queue');
+      } else {
+        // Show file picker
+        this.torrentPicker = { show: true, jobId: d.job_id, name: file.name, files: d.files, selected: d.files.map(f=>f.index), all: true };
+      }
+    },
+
+    toggleAllFiles() {
+      this.torrentPicker.selected = this.torrentPicker.all ? this.torrentPicker.files.map(f=>f.index) : [];
+    },
+
+    async startTorrent() {
+      const { jobId, selected } = this.torrentPicker;
+      this.torrentPicker.show = false;
+      await fetch(`/api/torrent/${jobId}/start`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ file_indices: selected }),
+      });
+      this.toast('Torrent added to queue');
+    },
+
+    async pauseJob(id)  { await fetch(`/api/jobs/${id}/pause`,  {method:'POST'}); },
+    async resumeJob(id) { await fetch(`/api/jobs/${id}/resume`, {method:'POST'}); },
+    async cancelJob(id) {
+      const ok = await this.askConfirm('Cancel download?', 'The in-progress download will be stopped.', 'Cancel Download', true);
+      if (ok) await fetch(`/api/jobs/${id}/cancel`, {method:'POST'});
+    },
+
+    async deleteFile(name) {
+      const ok = await this.askConfirm('Delete file?', `"${name}" will be permanently deleted.`, 'Delete', true);
+      if (!ok) return;
+      await fetch(`/api/files/${encodeURIComponent(name)}`, {method:'DELETE'});
+      this.toast(`${name} deleted`);
+    },
+
+    async deleteSelected() {
+      if (!this.selectedFiles.length) return;
+      const ok = await this.askConfirm(`Delete ${this.selectedFiles.length} files?`, 'These files will be permanently deleted.', 'Delete All', true);
+      if (!ok) return;
+      for (const name of this.selectedFiles)
+        await fetch(`/api/files/${encodeURIComponent(name)}`, {method:'DELETE'});
+      this.selectedFiles = [];
+      this.toast('Files deleted');
+    },
+
+    zipSelected() {
+      if (!this.selectedFiles.length) return;
+      fetch('/api/files/zip', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ filenames: this.selectedFiles }),
+      }).then(r => r.blob()).then(b => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'rapidleech_files.zip';
+        a.click();
+      });
+    },
+
+    zipAll() {
+      const all = this.files.map(f=>f.filename);
+      if (!all.length) return;
+      fetch('/api/files/zip', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ filenames: all }),
+      }).then(r => r.blob()).then(b => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'rapidleech_all.zip';
+        a.click();
+      });
+    },
+
+    async openFolderModal(f) {
+      if (this.folderModal._poll) clearInterval(this.folderModal._poll);
+      this.folderModal = { show: true, loading: true, name: f.filename, totalFiles: 0, totalSize: `${f.size_mb} MB`, files: [], zipping: false, zipFilesDone: 0, zipTotalFiles: 0, zipJobId: null, _poll: null };
+      try {
+        const res = await fetch(`/api/files/browse/${encodeURIComponent(f.filename)}`);
+        const data = await res.json();
+        this.folderModal.files = data.files || [];
+        this.folderModal.totalFiles = data.total_files || 0;
+        this.folderModal.totalSize = data.total_size || '';
+      } catch (e) {
+        this.toast('Failed to load folder contents', 'error');
+      } finally {
+        this.folderModal.loading = false;
+      }
+    },
+
+    closeFolderModal() {
+      if (this.folderModal._poll) clearInterval(this.folderModal._poll);
+      this.folderModal.show = false;
+    },
+
+    async startZipDownload() {
+      this.folderModal.zipping = true;
+      this.folderModal.zipFilesDone = 0;
+      this.folderModal.zipTotalFiles = 0;
+      try {
+        const res = await fetch('/api/files/zip-prepare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dirname: this.folderModal.name }),
+        });
+        const { job_id } = await res.json();
+        this.folderModal.zipJobId = job_id;
+        this.folderModal._poll = setInterval(async () => {
+          try {
+            const s = await fetch(`/api/files/zip-status/${job_id}`);
+            const d = await s.json();
+            this.folderModal.zipFilesDone = d.files_done || 0;
+            this.folderModal.zipTotalFiles = d.total_files || 0;
+            if (d.status === 'ready') {
+              clearInterval(this.folderModal._poll);
+              const a = document.createElement('a');
+              a.href = `/api/files/zip-download/${job_id}`;
+              a.download = `${this.folderModal.name}.zip`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => this.closeFolderModal(), 1500);
+            } else if (d.status === 'error') {
+              clearInterval(this.folderModal._poll);
+              this.folderModal.zipping = false;
+              this.toast(`ZIP failed: ${d.error || 'unknown error'}`, 'error');
+            }
+          } catch (e) { /* network hiccup — keep polling */ }
+        }, 600);
+      } catch (e) {
+        this.folderModal.zipping = false;
+        this.toast('Failed to start ZIP job', 'error');
+      }
+    },
+
+    toggleAllFiles2(e) {
+      this.selectedFiles = e.target.checked ? this.files.map(f=>f.filename) : [];
+    },
+
+    async loadLogs() {
+      const r = await fetch('/api/stats/logs?limit=100');
+      this.logs = await r.json();
+    },
+
+    askConfirm(title, msg, action='Confirm', danger=true) {
+      return new Promise(resolve => {
+        this.confirm = { show: true, title, msg, action, danger, cb: v => { this.confirm.show=false; resolve(v); } };
+      });
+    },
+
+    toast(msg, type='success') {
+      const id = Date.now() + Math.random();
+      this.toasts.push({ id, msg, type });
+      setTimeout(() => { this.toasts = this.toasts.filter(t=>t.id!==id); }, 3500);
+    },
+
+    copyText(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => this.toast('Copied to clipboard'));
+        return;
+      }
+      // Fallback for HTTP (clipboard API requires HTTPS)
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+      document.body.appendChild(el);
+      el.select();
+      try { document.execCommand('copy'); this.toast('Copied to clipboard'); }
+      catch { this.toast('Copy failed — select text manually', 'warn'); }
+      document.body.removeChild(el);
+    },
+
+    statusLabel(job) {
+      const icons = { downloading:'⬇', done:'✓', error:'✕', paused:'⏸', queued:'⏳', scanning:'🛡', metadata:'🔍', hashing:'#' };
+      return `${icons[job.status]||'?'} ${job.status.toUpperCase()}`;
+    },
+
+    expiryText(f) {
+      if (!TTL_HOURS) return '—';
+      const mtime = new Date(f.created_at);
+      const expires = new Date(mtime.getTime() + TTL_HOURS * 3600000);
+      const sec = (expires - Date.now()) / 1000;
+      if (sec <= 0) return 'Expired';
+      if (sec < 1800) return `⚠ ${Math.floor(sec/60)}m`;
+      if (sec < 3600) return `${Math.floor(sec/60)}m`;
+      const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+      return `${h}h ${m}m`;
+    },
+
+    expiryColor(f) {
+      if (!TTL_HOURS) return 'text-gray-600';
+      const mtime = new Date(f.created_at);
+      const sec = (new Date(mtime.getTime() + TTL_HOURS*3600000) - Date.now()) / 1000;
+      if (sec <= 0) return 'text-red-500';
+      if (sec < 1800) return 'text-red-400 animate-pulse';
+      if (sec < 3600) return 'text-amber-400';
+      return 'text-green-400';
+    },
+
+    logColor(level) {
+      return { info:'text-gray-400', done:'text-green-400', warn:'text-amber-400', error:'text-red-400', security:'text-purple-400' }[level] || 'text-gray-400';
+    },
+
+    fmtBytes(b) {
+      if (!b) return '—';
+      if (b < 1024) return `${b} B`;
+      if (b < 1048576) return `${(b/1024).toFixed(1)} KB`;
+      if (b < 1073741824) return `${(b/1048576).toFixed(1)} MB`;
+      return `${(b/1073741824).toFixed(2)} GB`;
+    },
+  };
+}
+</script>
+</body>
+</html>
