@@ -43,14 +43,15 @@ def _is_private_ip(ip_str: str) -> bool:
 async def validate_and_resolve(url: str) -> str:
     """Validate URL scheme, resolve DNS, block SSRF targets. Returns cleaned URL."""
     url = url.strip()
-    if len(url) > 2048:
-        raise SecurityError("URL exceeds maximum length")
 
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
 
     if scheme == "magnet":
         return url  # magnet URIs don't involve HTTP connections from the server
+
+    if len(url) > 2048:
+        raise SecurityError("URL exceeds maximum length")
 
     if scheme not in ALLOWED_SCHEMES:
         raise SecurityError(f"Scheme '{scheme}' is not allowed")
