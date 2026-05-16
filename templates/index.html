@@ -88,7 +88,7 @@
               'border-green-600': job.status==='done',
               'border-red-600': job.status==='error',
               'border-amber-600 border-dashed': job.status==='paused',
-              'border-[#222]': !['downloading','done','error','paused','hashing'].includes(job.status)
+              'border-[#222]': !['downloading','done','error','paused'].includes(job.status)
             }">
             <!-- Row 1: URL + badges -->
             <div class="flex items-center gap-2 flex-wrap">
@@ -101,7 +101,6 @@
                   'bg-red-500/20 text-red-300 border border-red-600': job.status==='error',
                   'bg-orange-500/20 text-orange-300 border border-orange-600': job.status==='paused',
                   'bg-gray-500/20 text-gray-400 border border-gray-600': job.status==='queued',
-                  'bg-purple-500/20 text-purple-300 border border-purple-600': job.status==='hashing',
                 }"
                 x-text="statusLabel(job)"></span>
               <span x-show="job.connections>0" class="text-[10px] text-gray-500" x-text="`×${job.connections}`"></span>
@@ -455,7 +454,7 @@
                   </svg>
                 </button>
                 <div x-show="extendOpenFor === f.filename" @click.stop
-                  class="absolute right-0 bottom-7 z-30 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl p-2 flex flex-col gap-1 min-w-[120px]">
+                  class="absolute right-0 top-full mt-1 z-30 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl p-2 flex flex-col gap-1 min-w-[120px]">
                   <p class="text-gray-500 text-[10px] px-1 pb-1 border-b border-[#2a2a2a]">Extend expiry</p>
                   <button @click="extendExpiry(f, 1); extendOpenFor=null" class="text-xs text-left px-2 py-1 rounded hover:bg-[#252525] text-gray-300 hover:text-amber-300 transition-colors">+1h from now</button>
                   <button @click="extendExpiry(f, 3); extendOpenFor=null" class="text-xs text-left px-2 py-1 rounded hover:bg-[#252525] text-gray-300 hover:text-amber-300 transition-colors">+3h from now</button>
@@ -811,7 +810,7 @@ function app() {
     },
 
     statusLabel(job) {
-      const icons = { downloading:'⬇', done:'✓', error:'✕', paused:'⏸', queued:'⏳', scanning:'🛡', metadata:'🔍', hashing:'#' };
+      const icons = { downloading:'⬇', done:'✓', error:'✕', paused:'⏸', queued:'⏳', scanning:'🛡', metadata:'🔍' };
       return `${icons[job.status]||'?'} ${job.status.toUpperCase()}`;
     },
 

@@ -257,11 +257,6 @@ async def _post_download(job_id: str) -> None:
         await job_manager.finish_job(job_id)
         return
 
-    # SHA-256
-    job_manager.update_job(job_id, status="hashing")
-    sha256 = await asyncio.to_thread(_hash_file, filepath)
-    job_manager.update_job(job_id, sha256=sha256, status="done")
-
     # ClamAV scan
     if settings.CLAM_SOCKET:
         job_manager.update_job(job_id, status="scanning", scan_result="scanning")
@@ -276,14 +271,6 @@ async def _post_download(job_id: str) -> None:
     )
     await job_manager.finish_job(job_id)
 
-
-def _hash_file(path: str) -> str:
-    import hashlib
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(65536), b""):
-            h.update(block)
-    return h.hexdigest()
 
 
 _QUALITY_PRESETS = [

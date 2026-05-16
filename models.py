@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Literal
 
-JobStatus = Literal["queued", "metadata", "downloading", "paused", "hashing", "done", "error", "scanning"]
+JobStatus = Literal["queued", "metadata", "downloading", "paused", "done", "error", "scanning"]
 JobType   = Literal["http", "torrent", "ytdlp"]
 
 
