@@ -15,7 +15,7 @@ router = APIRouter(tags=["fetch"])
 
 class FetchRequest(BaseModel):
     url: str
-    max_connections: int = 16
+    max_connections: int = 4
     torrent_file_indices: Optional[list[int]] = None
     format_id: Optional[str] = None
 

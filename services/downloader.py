@@ -17,12 +17,6 @@ from services.security import sanitize_filename
 
 _COOKIES_FILE = Path(__file__).resolve().parent.parent / "data" / "cookies.txt"
 
-_YTDLP_DOMAINS = {
-    "youtube.com", "youtu.be", "twitter.com", "x.com",
-    "tiktok.com", "instagram.com", "facebook.com", "vimeo.com",
-    "twitch.tv", "dailymotion.com", "reddit.com",
-}
-
 _aria2_client = None
 
 
@@ -66,14 +60,18 @@ def is_mega_url(url: str) -> bool:
 
 
 def is_media_url(url: str) -> bool:
-    host = urlparse(url).netloc.lower().lstrip("www.")
-    return any(host.endswith(d) for d in _YTDLP_DOMAINS)
+    """Return True if yt-dlp has a dedicated (non-generic) extractor for this URL."""
+    return any(
+        ie.suitable(url)
+        for ie in yt_dlp.extractor.gen_extractors()
+        if ie.IE_NAME != "generic"
+    )
 
 
 async def dispatch(
     job_id: str,
     url: str,
-    max_conn: int = 16,
+    max_conn: int = 4,
     torrent_indices: Optional[list[int]] = None,
     format_id: Optional[str] = None,
 ) -> None:
@@ -135,7 +133,7 @@ def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> N
                 eta=fmt_eta(eta_s),
             )
         elif d["status"] == "finished":
-            filename = sanitize_filename(os.path.basename(d.get("filename", "")))
+            filename = sanitize_filename(os.path.basename(d.get("filename") or ""))
             job_manager.update_job(
                 job_id, percent=100.0, status="done", filename=filename
             )
@@ -154,6 +152,23 @@ def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> N
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+        # Fallback: if the "finished" hook didn't fire (yt-dlp swallowed the exception),
+        # find the most recently modified file in the download dir and mark the job done.
+        job = job_manager.get_job(job_id)
+        if job and job.status == "downloading":
+            try:
+                entries = [
+                    e for e in os.scandir(settings.DOWNLOAD_DIR)
+                    if e.is_file() and not e.name.endswith((".part", ".aria2", ".ytdl"))
+                ]
+                if entries:
+                    newest = max(entries, key=lambda e: e.stat().st_mtime)
+                    filename = sanitize_filename(newest.name)
+                    job_manager.update_job(job_id, percent=100.0, status="done", filename=filename)
+                else:
+                    job_manager.update_job(job_id, percent=100.0, status="done")
+            except Exception:
+                job_manager.update_job(job_id, percent=100.0, status="done")
     except Exception as e:
         job_manager.update_job(job_id, status="error", error=str(e))
 

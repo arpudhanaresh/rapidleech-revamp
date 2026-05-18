@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Downloads — resolved to absolute path so every service agrees on the location
     DOWNLOAD_DIR: str = str(_ROOT / "downloads")
     MAX_CONCURRENT: int = 3
-    DEFAULT_CONNECTIONS: int = 16
+    DEFAULT_CONNECTIONS: int = 4
     MAX_FILE_SIZE_GB: float = 0
     FILE_TTL_DEFAULT_HOURS: int = 5
     FILE_TTL_MAX_HOURS: int = 12
