@@ -59,6 +59,11 @@ def is_mega_url(url: str) -> bool:
     return host in ("mega.nz", "mega.co.nz")
 
 
+def is_mediafire_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower().lstrip("www.")
+    return host == "mediafire.com"
+
+
 def is_media_url(url: str) -> bool:
     """Return True if yt-dlp has a dedicated (non-generic) extractor for this URL."""
     return any(
@@ -90,6 +95,9 @@ async def dispatch(
             job_manager.update_job(job_id, status="queued")
             async with mega_service._mega_semaphore:
                 await asyncio.to_thread(mega_service.download, job_id, url)
+        elif is_mediafire_url(url):
+            from services import mediafire_service
+            await mediafire_service.download(job_id, url, max_conn)
         elif is_media_url(url):
             await asyncio.to_thread(_ytdlp_download, job_id, url, format_id)
         else:
@@ -107,6 +115,62 @@ async def dispatch(
         if job and job.status in ("done", "error"):
             await _post_download(job_id)
         job_manager.clear_cancelled(job_id)
+
+
+_SUSPICIOUS_BASENAMES = frozenset({
+    "file", "download", "view", "get", "index", "attachment", "f", "d",
+})
+
+
+def _try_rename(old_name: str, new_name: str) -> None:
+    try:
+        old = os.path.join(settings.DOWNLOAD_DIR, old_name)
+        new = os.path.join(settings.DOWNLOAD_DIR, new_name)
+        if os.path.exists(old) and not os.path.exists(new):
+            os.rename(old, new)
+    except OSError:
+        pass
+
+
+def _recover_filename(filename: str, d: dict, url: str) -> str:
+    """Fix yt-dlp filenames that are URL path segments (e.g. 'file' for MediaFire).
+
+    Priority:
+    1. display_id from info_dict — file-hosting extractors set this to the real filename.
+    2. URL path segment that looks like a real filename (has a recognised extension).
+    3. Append missing extension from info_dict.ext as last resort.
+    """
+    from urllib.parse import urlparse, unquote
+    info = d.get("info_dict") or {}
+
+    # 1. display_id is the true filename for sites like MediaFire
+    display_id = (info.get("display_id") or "").strip()
+    if display_id and os.path.splitext(display_id)[1]:
+        new_name = sanitize_filename(display_id)
+        if new_name and new_name != filename:
+            _try_rename(filename, new_name)
+            return new_name
+
+    # 2. Scan URL path segments for a proper filename (has a recognisable extension)
+    for seg in reversed(urlparse(url).path.split("/")):
+        seg = unquote(seg)
+        base, ext_part = os.path.splitext(seg)
+        if ext_part and 1 < len(ext_part) <= 7 and ext_part[1:].isalnum() and base:
+            new_name = sanitize_filename(seg)
+            if new_name and new_name.lower() not in _SUSPICIOUS_BASENAMES:
+                if new_name != filename:
+                    _try_rename(filename, new_name)
+                return new_name
+
+    # 3. At least add the missing extension
+    if not os.path.splitext(filename)[1]:
+        ext = (info.get("ext") or "").lower().strip().lstrip(".")
+        if ext and ext not in ("unknown", "file"):
+            new_name = f"{filename}.{ext}"
+            _try_rename(filename, new_name)
+            return new_name
+
+    return filename
 
 
 def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> None:
@@ -134,7 +198,11 @@ def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> N
                 eta=fmt_eta(eta_s),
             )
         elif d["status"] == "finished":
-            filename = sanitize_filename(os.path.basename(d.get("filename") or ""))
+            raw = d.get("filename") or ""
+            filename = sanitize_filename(os.path.basename(raw))
+            base = os.path.splitext(filename)[0].lower()
+            if filename and (not os.path.splitext(filename)[1] or base in _SUSPICIOUS_BASENAMES):
+                filename = _recover_filename(filename, d, url)
             job_manager.update_job(
                 job_id, percent=100.0, status="done", filename=filename
             )
@@ -165,6 +233,9 @@ def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> N
                 if entries:
                     newest = max(entries, key=lambda e: e.stat().st_mtime)
                     filename = sanitize_filename(newest.name)
+                    base = os.path.splitext(filename)[0].lower()
+                    if filename and (not os.path.splitext(filename)[1] or base in _SUSPICIOUS_BASENAMES):
+                        filename = _recover_filename(filename, {}, url)
                     job_manager.update_job(job_id, percent=100.0, status="done", filename=filename)
                 else:
                     job_manager.update_job(job_id, percent=100.0, status="done")
