@@ -36,11 +36,18 @@ def _served_bytes(range_header: Optional[str], file_size: int) -> int:
 
 @router.get("/files")
 async def list_files():
-    files = file_service.list_files()
     expiries = await db.get_all_expiries()
-    for f in files:
-        f.expires_at = expiries.get(f.filename)
-    return files
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = []
+    for f in file_service.list_files():
+        exp = expiries.get(f.filename)
+        if exp and exp < now_iso:
+            file_service.delete_file(f.filename)
+            await db.delete_file_expiry(f.filename)
+            continue
+        f.expires_at = exp
+        result.append(f)
+    return result
 
 
 @router.get("/files/download/{filename:path}", responses={404: {"description": _MSG_NOT_FOUND}})
