@@ -19,3 +19,5 @@ itsdangerous
 psutil
 humanize
 validators
+pycryptodome>=3.9.6,<4.0.0
+tenacity>=8.0.0

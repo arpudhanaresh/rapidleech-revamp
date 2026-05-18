@@ -60,6 +60,11 @@ def is_torrent(url: str) -> bool:
     return False
 
 
+def is_mega_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower().lstrip("www.")
+    return host in ("mega.nz", "mega.co.nz")
+
+
 def is_media_url(url: str) -> bool:
     host = urlparse(url).netloc.lower().lstrip("www.")
     return any(host.endswith(d) for d in _YTDLP_DOMAINS)
@@ -82,6 +87,11 @@ async def dispatch(
             # Internal upload sentinels skip network validation — bytes are already local
             from services import torrent_service
             await torrent_service.start(job_id, url, torrent_indices)
+        elif is_mega_url(url):
+            from services import mega_service
+            job_manager.update_job(job_id, status="queued")
+            async with mega_service._mega_semaphore:
+                await asyncio.to_thread(mega_service.download, job_id, url)
         elif is_media_url(url):
             await asyncio.to_thread(_ytdlp_download, job_id, url, format_id)
         else:

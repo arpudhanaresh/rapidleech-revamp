@@ -46,10 +46,13 @@ async def finish_job(job_id: str) -> None:
     job.finished_at = datetime.now(timezone.utc).isoformat()
     await db.insert_job(job)
     await db.increment_stats(job.size_bytes, job.status == "done")
+    detail = job.filename or job.url
+    if job.status != "done" and job.error:
+        detail = f"{detail} — {job.error}"
     await db.insert_log(
         "done" if job.status == "done" else "error",
         f"Job {job_id[:8]} {'completed' if job.status == 'done' else 'failed'} — "
-        f"{job.filename or job.url} ({job.size})",
+        f"{detail} ({job.size})",
     )
     remove_live_job(job_id)
 
