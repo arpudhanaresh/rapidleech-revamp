@@ -32,8 +32,13 @@ def _get_session():
     if not _LT_AVAILABLE:
         raise RuntimeError("libtorrent is not installed. Run: pip install lbry-libtorrent")
     if _session is None:
+        _alert_mask = (
+            lt.alert.category_t.status_notification
+            | lt.alert.category_t.storage_notification
+            | lt.alert.category_t.error_notification
+        )
         _session = lt.session({
-            "alert_mask": lt.alert.category_t.all_categories,
+            "alert_mask": _alert_mask,
             "listen_interfaces": "0.0.0.0:6881",
             "dht_bootstrap_nodes": "router.bittorrent.com:6881,dht.transmissionbt.com:6881,router.utorrent.com:6881",
             "enable_dht": True,
@@ -221,7 +226,10 @@ def _apply_file_priorities(handle, files: list[TorrentFile], selected_indices: O
 def _process_alerts(job_id: str, sess, handle, files: list[TorrentFile]) -> bool:
     """Process pending alerts. Returns True if a fatal file error was detected."""
     for alert in sess.pop_alerts():
-        if not (hasattr(alert, "handle") and alert.handle == handle):
+        try:
+            if not (hasattr(alert, "handle") and alert.handle == handle):
+                continue
+        except Exception:
             continue
         _handle_alert(job_id, alert, files)
         if isinstance(alert, lt.file_error_alert):
