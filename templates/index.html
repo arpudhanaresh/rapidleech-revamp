@@ -122,7 +122,7 @@
             <!-- Stats -->
             <div class="flex flex-wrap gap-2">
               <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
-                <div class="text-[9px] text-gray-500 uppercase">Speed</div>
+                <div class="text-[9px] text-gray-500 uppercase" x-text="job.job_type==='torrent' ? '↓ Speed' : 'Speed'"></div>
                 <div class="text-[#00e5ff] text-sm font-bold" x-text="job.speed||'—'"></div>
               </div>
               <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
@@ -143,6 +143,10 @@
               </div>
               <template x-if="job.job_type==='torrent'">
                 <div class="flex gap-2">
+                  <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
+                    <div class="text-[9px] text-gray-500 uppercase">↑ Upload</div>
+                    <div class="text-orange-400 text-sm font-bold" x-text="job.upload_speed||'—'"></div>
+                  </div>
                   <div class="px-3 py-1.5 bg-[#0d0d0d] border border-[#222] rounded-lg">
                     <div class="text-[9px] text-gray-500 uppercase">Seeds</div>
                     <div class="text-green-400 text-sm font-bold" x-text="job.seeders"></div>

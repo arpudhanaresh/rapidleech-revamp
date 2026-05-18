@@ -40,6 +40,7 @@ def _get_session():
             "enable_lsd": True,
             "enable_upnp": True,
             "enable_natpmp": True,
+            "connections_limit": settings.TORRENT_MAX_CONNECTIONS,
         })
     return _session
 
@@ -156,16 +157,22 @@ def _add_torrent_handle(sess, job_id: str, url: str, save_path: str):
     if url.startswith("magnet:"):
         params = lt.parse_magnet_uri(url)
         params.save_path = save_path
-        return sess.add_torrent(params)
-
-    if job_id in _uploaded_torrent_bytes:
+        handle = sess.add_torrent(params)
+    elif job_id in _uploaded_torrent_bytes:
         data = _uploaded_torrent_bytes.pop(job_id)
+        info = lt.torrent_info(lt.bdecode(data))
+        handle = sess.add_torrent({"ti": info, "save_path": save_path})
     else:
         import httpx as _httpx
         data = _httpx.get(url, follow_redirects=True, timeout=15).content
+        info = lt.torrent_info(lt.bdecode(data))
+        handle = sess.add_torrent({"ti": info, "save_path": save_path})
 
-    info = lt.torrent_info(lt.bdecode(data))
-    return sess.add_torrent({"ti": info, "save_path": save_path})
+    try:
+        handle.set_max_connections(settings.TORRENT_MAX_CONNECTIONS_PER_TORRENT)
+    except Exception:
+        pass
+    return handle
 
 
 _METADATA_TIMEOUT_S = 60
@@ -310,11 +317,13 @@ def _update_torrent_status(job_id: str, st, files: list[TorrentFile], handle) ->
                     fs_size = max(int(f.size_mb * 1024 * 1024), 1)
                     f.percent = min(prog[i] / fs_size * 100, 100.0)
 
+    upload_mbps = st.upload_rate / (1024 * 1024)
     job = job_manager.get_job(job_id)
     if job:
         job.push_speed(mbps)
     job_manager.update_job(
         job_id,
+        status="downloading",
         percent=pct,
         downloaded_bytes=done,
         eta=fmt_eta(eta_s),
@@ -322,6 +331,8 @@ def _update_torrent_status(job_id: str, st, files: list[TorrentFile], handle) ->
         peers=st.num_peers,
         leechers=max(st.num_peers - st.num_seeds, 0),
         ratio=round(st.all_time_upload / max(st.all_time_download, 1), 3),
+        upload_speed=f"{upload_mbps:.1f} MB/s",
+        upload_speed_mbps=upload_mbps,
         files=files,
     )
 

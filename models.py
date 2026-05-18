@@ -53,6 +53,8 @@ class Job:
     peers: int = 0
     leechers: int = 0
     ratio: float = 0.0
+    upload_speed: str = "N/A"
+    upload_speed_mbps: float = 0.0
     files: list[TorrentFile] = field(default_factory=list)
     # result
     filename: Optional[str] = None

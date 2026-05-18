@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     FILE_TTL_DEFAULT_HOURS: int = 5
     FILE_TTL_MAX_HOURS: int = 12
 
+    # Torrent
+    TORRENT_MAX_CONNECTIONS: int = 2000
+    TORRENT_MAX_CONNECTIONS_PER_TORRENT: int = 500
+
     # aria2
     ARIA2_HOST: str = "http://localhost"
     ARIA2_PORT: int = 6800

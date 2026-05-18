@@ -113,6 +113,8 @@ def _job_dict(j) -> dict:
         "peers": j.peers,
         "leechers": j.leechers,
         "ratio": j.ratio,
+        "upload_speed": j.upload_speed,
+        "upload_speed_mbps": j.upload_speed_mbps,
         "chunks": [{"index": c.index, "downloaded": c.downloaded, "end": c.end - c.start, "done": c.done} for c in j.chunks],
         "files": [{"index": f.index, "path": f.path, "size_mb": f.size_mb, "percent": f.percent} for f in j.files],
         "created_at": j.created_at,
