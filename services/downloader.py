@@ -106,6 +106,7 @@ async def dispatch(
         job = job_manager.get_job(job_id)
         if job and job.status in ("done", "error"):
             await _post_download(job_id)
+        job_manager.clear_cancelled(job_id)
 
 
 def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> None:
@@ -216,6 +217,23 @@ def _aria2_download(job_id: str, url: str, max_conn: int, aria2, size_bytes: int
     gid = aria2.add_uris([url], options=options).gid
     while True:
         time.sleep(0.5)
+        if job_manager.is_cancelled(job_id):
+            try:
+                dl = aria2.get_download(gid)
+                file_path = dl.files[0].path if dl.files else None
+                aria2.remove([dl])
+                if file_path:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    try:
+                        os.remove(file_path + ".aria2")
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+            break
         try:
             dl = aria2.get_download(gid)
         except Exception:

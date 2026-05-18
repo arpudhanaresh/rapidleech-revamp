@@ -9,6 +9,15 @@ from services import db
 # ── In-memory live store ──────────────────────────────────────────────────────
 _live: dict[str, Job] = {}
 _lock = asyncio.Lock()
+_cancelled: set[str] = set()
+
+
+def is_cancelled(job_id: str) -> bool:
+    return job_id in _cancelled
+
+
+def clear_cancelled(job_id: str) -> None:
+    _cancelled.discard(job_id)
 
 
 def create_job(job_id: str, url: str, job_type: str = "http", ip: Optional[str] = None) -> Job:
@@ -61,6 +70,9 @@ async def cancel_job(job_id: str) -> None:
     job = _live.get(job_id)
     if not job:
         return
+    _cancelled.add(job_id)
     job.status = "error"
     job.error = "Cancelled by user"
+    # Remove from DB immediately so a restart won't re-queue this job
+    await db.remove_pending(job_id)
     await finish_job(job_id)

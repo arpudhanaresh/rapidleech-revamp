@@ -79,8 +79,17 @@ async def accelerate(job_id: str, url: str, max_conn: int = 16) -> Optional[str]
 
         await asyncio.gather(
             *[_chunk_download(job_id, url, chunk, client, part_paths[chunk.index])
-              for chunk in chunks]
+              for chunk in chunks],
+            return_exceptions=True,
         )
+
+        if job_manager.is_cancelled(job_id):
+            for part in part_paths:
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+            return None
 
         # ── Reassemble ───────────────────────────────────────────────────────
         async with aiofiles.open(filepath, "wb") as out:
@@ -116,6 +125,8 @@ async def _chunk_download(
                 resp.raise_for_status()
                 async with aiofiles.open(part_path, "wb") as f:
                     async for data in resp.aiter_bytes(chunk_size=65536):
+                        if job_manager.is_cancelled(job_id):
+                            return
                         await f.write(data)
                         chunk.downloaded += len(data)
                         _update_progress(job_id)
@@ -151,7 +162,7 @@ async def _single_stream(
     url: str,
     client: httpx.AsyncClient,
     filepath: Optional[str] = None,
-) -> str:
+) -> Optional[str]:
     job = job_manager.get_job(job_id)
     if not job:
         raise RuntimeError("Job not found")
@@ -174,6 +185,8 @@ async def _single_stream(
             )
         async with aiofiles.open(filepath, "wb") as f:
             async for chunk in resp.aiter_bytes(65536):
+                if job_manager.is_cancelled(job_id):
+                    break
                 await f.write(chunk)
                 downloaded += len(chunk)
                 elapsed = time.monotonic() - start
@@ -185,6 +198,13 @@ async def _single_stream(
                     job_manager.update_job(
                         job_id, percent=min(pct, 99.9), downloaded_bytes=downloaded
                     )
+
+    if job_manager.is_cancelled(job_id):
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+        return None
 
     job_manager.update_job(job_id, percent=100.0, status="done")
     return filepath
