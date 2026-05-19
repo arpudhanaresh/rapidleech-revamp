@@ -18,6 +18,7 @@ async def index(request: Request):
         "request": request,
         "stats": stats,
         "ttl_max_hours": settings.FILE_TTL_MAX_HOURS,
+        "ttl_default_hours": settings.FILE_TTL_DEFAULT_HOURS,
     })
 
 

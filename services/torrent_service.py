@@ -115,6 +115,7 @@ async def start(
     job_id: str,
     url: str,
     selected_indices: Optional[list[int]] = None,
+    ttl_hours: Optional[int] = None,
 ) -> None:
     """Start torrent download — runs the alert loop in a thread."""
     uploaded = await asyncio.to_thread(_torrent_download, job_id, url, selected_indices)
@@ -122,7 +123,7 @@ async def start(
         from services.db import increment_uploaded
         await increment_uploaded(uploaded)
     from services.downloader import _post_download
-    await _post_download(job_id)
+    await _post_download(job_id, ttl_hours)
 
 
 def _torrent_download(

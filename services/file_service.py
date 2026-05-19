@@ -7,6 +7,7 @@ import threading
 import uuid as _uuid
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import AsyncIterator, Optional
 
 import humanize
@@ -98,31 +99,32 @@ def list_files() -> list[FileItem]:
     return sorted(items, key=lambda f: f.created_at, reverse=True)
 
 
-def delete_file(filename: str) -> bool:
+def delete_file(filename: str) -> tuple[bool, str]:
+    """Returns (success, error_message). error_message is empty on success."""
     import shutil
-    from services.security import sanitize_filename
-    safe = sanitize_filename(filename)
-    path = os.path.join(settings.DOWNLOAD_DIR, safe)
-    if os.path.isdir(path):
-        shutil.rmtree(path)
-        return True
-    if os.path.isfile(path):
-        os.remove(path)
-        return True
-    return False
+    path = Path(settings.DOWNLOAD_DIR) / filename
+    try:
+        if path.is_dir():
+            shutil.rmtree(path)
+            return True, ""
+        if path.is_file():
+            path.unlink()
+            return True, ""
+        return False, "not_found"
+    except PermissionError as e:
+        return False, f"permission_denied: {e}"
+    except OSError as e:
+        return False, f"os_error: {e}"
 
 
 def get_filepath(filename: str) -> Optional[str]:
-    from services.security import sanitize_filename
-    safe = sanitize_filename(filename)
-    path = os.path.join(settings.DOWNLOAD_DIR, safe)
-    return path if os.path.exists(path) else None
+    path = Path(settings.DOWNLOAD_DIR) / filename
+    return str(path) if path.exists() else None
 
 
 def get_dir_filepath(dirname: str, filepath: str) -> Optional[str]:
     """Securely resolve a file inside a downloaded directory (path-traversal safe)."""
-    from services.security import sanitize_filename
-    safe_dir = sanitize_filename(dirname)
+    safe_dir = Path(dirname).name
     dir_root = os.path.realpath(os.path.join(settings.DOWNLOAD_DIR, safe_dir))
     # Resolve candidate and ensure it stays inside dir_root
     candidate = os.path.realpath(os.path.join(dir_root, filepath))
@@ -194,8 +196,7 @@ async def zip_dir_stream(dir_path: str) -> AsyncIterator[bytes]:
 
 def list_dir_contents(dirname: str) -> Optional[dict]:
     """Return file tree + sizes for a downloaded torrent directory."""
-    from services.security import sanitize_filename
-    safe = sanitize_filename(dirname)
+    safe = Path(dirname).name
     dir_path = os.path.join(settings.DOWNLOAD_DIR, safe)
     if not os.path.isdir(dir_path):
         return None
@@ -252,8 +253,7 @@ def _zip_worker(job_id: str, dir_path: str, out_path: str) -> None:
 
 
 def start_zip_job(dirname: str) -> Optional[dict]:
-    from services.security import sanitize_filename
-    safe = sanitize_filename(dirname)
+    safe = Path(dirname).name
     dir_path = os.path.join(settings.DOWNLOAD_DIR, safe)
     if not os.path.isdir(dir_path):
         return None

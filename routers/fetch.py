@@ -18,6 +18,7 @@ class FetchRequest(BaseModel):
     max_connections: int = 4
     torrent_file_indices: Optional[list[int]] = None
     format_id: Optional[str] = None
+    ttl_hours: Optional[int] = None
 
 
 @router.post("/fetch")
@@ -47,6 +48,7 @@ async def fetch(request: Request, body: FetchRequest, background: BackgroundTask
         body.max_connections,
         body.torrent_file_indices,
         body.format_id,
+        body.ttl_hours,
     )
     return {"job_id": job_id}
 

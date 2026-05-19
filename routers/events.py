@@ -26,7 +26,7 @@ async def sse(request: Request):
             for f in file_service.list_files():
                 exp = expiries.get(f.filename)
                 if exp and exp < now_iso:
-                    file_service.delete_file(f.filename)
+                    file_service.delete_file(f.filename)  # ignore error tuple on auto-expiry
                     await db.delete_file_expiry(f.filename)
                     await db.insert_log("info", f"Auto-deleted {f.filename} (expired)")
                     continue

@@ -52,35 +52,50 @@ async def list_files():
 
 @router.get("/files/download/{filename:path}", responses={404: {"description": _MSG_NOT_FOUND}})
 async def download_file(filename: str, request: Request):
-    safe = sanitize_filename(filename)
-    path = file_service.get_filepath(safe)
+    name = Path(filename).name  # strip any directory components
+    path = file_service.get_filepath(name)
     if not path:
         raise HTTPException(404, _MSG_NOT_FOUND)
     if os.path.isdir(path):
         return StreamingResponse(
             file_service.zip_dir_stream(path),
             media_type=_MIME_ZIP,
-            headers={"Content-Disposition": f'attachment; filename="{safe}.zip"'},
+            headers={"Content-Disposition": f'attachment; filename="{name}.zip"'},
         )
     size = os.path.getsize(path)
     served = _served_bytes(request.headers.get("range"), size)
     await db.increment_uploaded(served)
     return FileResponse(
         path,
-        filename=safe,
+        filename=name,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 
-@router.delete("/files/{filename:path}", responses={404: {"description": _MSG_NOT_FOUND}})
-async def delete_file(filename: str):
-    safe = sanitize_filename(filename)
-    ok = file_service.delete_file(safe)
+async def _do_delete_file(name: str):
+    ok, err = file_service.delete_file(name)
     if not ok:
-        raise HTTPException(404, _MSG_NOT_FOUND)
-    await db.delete_file_expiry(safe)
-    return {"message": f"{safe} deleted"}
+        if err == "not_found":
+            raise HTTPException(404, _MSG_NOT_FOUND)
+        raise HTTPException(500, f"Delete failed: {err}")
+    await db.delete_file_expiry(name)
+    return {"message": f"{name} deleted"}
+
+
+@router.delete("/files/{filename:path}", responses={404: {"description": _MSG_NOT_FOUND}, 500: {"description": "Delete failed"}})
+async def delete_file(filename: str):
+    return await _do_delete_file(Path(filename).name)
+
+
+class DeleteRequest(BaseModel):
+    filename: str
+
+
+@router.post("/files/delete", responses={404: {"description": _MSG_NOT_FOUND}, 500: {"description": "Delete failed"}})
+async def delete_file_post(body: DeleteRequest):
+    """POST fallback for proxies that block DELETE or encode filenames in URLs."""
+    return await _do_delete_file(Path(body.filename).name)
 
 
 class ZipRequest(BaseModel):

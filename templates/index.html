@@ -238,13 +238,22 @@
         </button>
       </div>
 
-      <!-- Torrent upload -->
-      <div class="flex items-center gap-4">
+      <!-- Torrent upload + TTL -->
+      <div class="flex flex-wrap items-center gap-4">
         <span class="text-gray-600 text-xs">or</span>
         <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d0d0d] border border-[#333] hover:border-[#555] cursor-pointer transition-colors text-sm text-gray-400 hover:text-gray-200">
           📦 Upload .torrent
           <input type="file" accept=".torrent" class="hidden" @change="uploadTorrent($event)">
         </label>
+        <div class="flex items-center gap-2 ml-auto">
+          <span class="text-gray-600 text-xs whitespace-nowrap">Auto-delete:</span>
+          <select x-model.number="ttlHours" class="bg-[#0d0d0d] border border-[#333] focus:border-[#00e5ff] rounded-lg px-2 py-1.5 text-gray-300 text-xs outline-none transition-colors cursor-pointer">
+            <option value="1">After 1h</option>
+            <option value="3">After 3h</option>
+            <option value="5">After 5h</option>
+            <option value="12">After 12h</option>
+          </select>
+        </div>
       </div>
     </section>
 
@@ -430,59 +439,68 @@
             <button @click="zipSelected()" class="text-cyan-400 hover:text-cyan-300 transition-colors">📦 ZIP</button>
             <button @click="selectedFiles=[]" class="text-gray-500 hover:text-gray-300 transition-colors ml-auto">Clear</button>
           </div>
-          <!-- Table header -->
-          <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-2 border-b border-[#1e1e1e] text-[10px] text-gray-500 uppercase tracking-wider">
-            <input type="checkbox" @change="toggleAllFiles2($event)" class="accent-[#00e5ff]">
-            <span>Filename</span>
-            <span>Size</span>
-            <span>Expires</span>
-            <span>Actions</span>
-          </div>
-          <!-- Rows -->
-          <template x-for="f in files" :key="f.filename">
-            <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-3 border-b border-[#161616] last:border-0 hover:bg-[#141414] transition-colors">
-              <input type="checkbox" :value="f.filename" x-model="selectedFiles" class="accent-[#00e5ff]">
-              <span class="text-gray-200 text-xs truncate flex items-center gap-1" :title="f.filename">
-                <span x-show="f.is_dir" class="text-yellow-400">📁</span>
-                <span x-text="f.filename"></span>
-                <span x-show="f.is_dir" class="text-gray-500 text-[10px]">(ZIP)</span>
-              </span>
-              <span class="text-gray-400 text-xs whitespace-nowrap" x-text="`${f.size_mb} MB`"></span>
-              <div class="relative flex items-center gap-1">
-                <span class="text-xs whitespace-nowrap" :class="expiryColor(f)" x-text="expiryText(f)"></span>
-                <button x-show="f.expires_at"
-                  @click.stop="openExtendMenu($event, f.filename)"
-                  title="Extend expiry"
-                  class="p-0.5 rounded hover:bg-[#222] text-gray-600 hover:text-amber-400 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                </button>
-              </div>
-              <div class="flex gap-1">
-                <a :href="f.is_dir ? 'javascript:void(0)' : `/api/files/download/${encodeURIComponent(f.filename)}`"
-                  @click="f.is_dir && ($event.preventDefault(), openFolderModal(f))"
-                  class="p-1.5 rounded bg-cyan-900/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors"
-                  :title="f.is_dir ? 'Browse & download folder' : 'Download'">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                </a>
-                <button x-show="!f.is_dir" @click="copyText(`${location.origin}/api/files/download/${encodeURIComponent(f.filename)}`)"
-                  class="p-1.5 rounded bg-[#1a1a1a] hover:bg-[#222] text-gray-400 transition-colors" title="Copy link">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
-                <button @click="deleteFile(f.filename)"
-                  class="p-1.5 rounded bg-red-900/30 hover:bg-red-700/50 text-red-400 transition-colors" title="Delete">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                  </svg>
-                </button>
-              </div>
+          <!-- Scrollable table -->
+          <div class="overflow-x-auto">
+            <!-- Table header -->
+            <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-2 border-b border-[#1e1e1e] text-[10px] text-gray-500 uppercase tracking-wider min-w-[520px]">
+              <input type="checkbox" @change="toggleAllFiles2($event)" class="accent-[#00e5ff]">
+              <span>Filename</span>
+              <span>Size</span>
+              <span>Expires</span>
+              <span>Actions</span>
             </div>
-          </template>
+            <!-- Rows -->
+            <template x-for="f in files" :key="f.filename">
+              <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-3 border-b border-[#161616] last:border-0 hover:bg-[#141414] transition-colors min-w-[520px]">
+                <input type="checkbox" :value="f.filename" x-model="selectedFiles" class="accent-[#00e5ff]">
+                <span class="text-gray-200 text-xs truncate flex items-center gap-1" :title="f.filename">
+                  <span x-show="f.is_dir" class="text-yellow-400">📁</span>
+                  <span x-text="f.filename"></span>
+                  <span x-show="f.is_dir" class="text-gray-500 text-[10px]">(ZIP)</span>
+                </span>
+                <span class="text-gray-400 text-xs whitespace-nowrap" x-text="`${f.size_mb} MB`"></span>
+                <div class="relative flex items-center gap-1">
+                  <span class="text-xs whitespace-nowrap" :class="expiryColor(f)" x-text="expiryText(f)"></span>
+                  <button x-show="f.expires_at"
+                    @click.stop="openExtendMenu($event, f.filename)"
+                    title="Extend expiry"
+                    class="p-0.5 rounded hover:bg-[#222] text-gray-600 hover:text-amber-400 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="flex gap-1">
+                  <button x-show="!f.is_dir && previewType(f.filename)" @click="openPreview(f)"
+                    class="p-1.5 rounded bg-purple-900/30 hover:bg-purple-700/50 text-purple-300 transition-colors" title="Preview">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <a :href="f.is_dir ? 'javascript:void(0)' : `/api/files/download/${encodeURIComponent(f.filename)}`"
+                    @click="f.is_dir && ($event.preventDefault(), openFolderModal(f))"
+                    class="p-1.5 rounded bg-cyan-900/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors"
+                    :title="f.is_dir ? 'Browse & download folder' : 'Download'">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                  </a>
+                  <button x-show="!f.is_dir" @click="copyText(`${location.origin}/api/files/download/${encodeURIComponent(f.filename)}`)"
+                    class="p-1.5 rounded bg-[#1a1a1a] hover:bg-[#222] text-gray-400 transition-colors" title="Copy link">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <button @click="deleteFile(f.filename)"
+                    class="p-1.5 rounded bg-red-900/30 hover:bg-red-700/50 text-red-400 transition-colors" title="Delete">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
       </template>
     </section>
@@ -515,6 +533,19 @@
     <button @click="extendExpiry(extendMenuFile, 12); extendOpenFor=null" class="text-xs text-left px-2 py-1 rounded hover:bg-[#252525] text-gray-300 hover:text-amber-300 transition-colors">+12h from now (max)</button>
   </div>
 
+  <!-- ── Preview modal ─────────────────────────────────────────────── -->
+  <div x-show="preview.show" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm p-4" @click="preview.show=false" x-transition>
+    <div class="w-full max-w-5xl flex flex-col items-center gap-3" @click.stop>
+      <div class="flex items-center justify-between w-full">
+        <span class="text-gray-400 text-xs truncate max-w-[70vw]" x-text="preview.name"></span>
+        <button @click="preview.show=false" class="text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg bg-[#1a1a1a] hover:bg-[#222] transition-colors ml-4 shrink-0">✕ Close</button>
+      </div>
+      <img x-show="preview.type==='image'" :src="preview.url" class="max-w-full max-h-[82vh] rounded-xl object-contain shadow-2xl" :alt="preview.name">
+      <video x-show="preview.type==='video'" :src="preview.url" controls autoplay playsinline class="max-w-full max-h-[82vh] w-full rounded-xl shadow-2xl bg-black"></video>
+      <audio x-show="preview.type==='audio'" :src="preview.url" controls class="w-full max-w-lg mt-4"></audio>
+    </div>
+  </div>
+
   <footer class="text-center text-gray-700 text-xs py-6">
     RapidLeech-Py — Powered by yt-dlp, aria2 &amp; libtorrent
   </footer>
@@ -536,6 +567,8 @@ function app() {
     torrentPicker: { show: false, jobId: null, name: '', files: [], selected: [], all: false },
     ytPicker: { show: false, url: '', formats: [], loading: false, error: '', selected: '__auto__' },
     folderModal: { show: false, loading: false, name: '', totalFiles: 0, totalSize: '', files: [], zipping: false, zipFilesDone: 0, zipTotalFiles: 0, zipJobId: null, _poll: null },
+    preview: { show: false, type: '', url: '', name: '' },
+    ttlHours: {{ ttl_default_hours }},
     _sseSource: null,
 
     init() {
@@ -627,7 +660,7 @@ function app() {
       const r = await fetch('/api/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, format_id }),
+        body: JSON.stringify({ url, format_id, ttl_hours: this.ttlHours || null }),
       });
       const d = await r.json();
       if (d.error) this.toast(d.error, 'error');
@@ -675,21 +708,43 @@ function app() {
       if (ok) await fetch(`/api/jobs/${id}/cancel`, {method:'POST'});
     },
 
+    async _deleteRequest(name) {
+      let r = await fetch(`/api/files/${encodeURIComponent(name)}`, {method:'DELETE'});
+      if (r.status === 403 || r.status === 405) {
+        r = await fetch('/api/files/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({filename: name}),
+        });
+      }
+      return r;
+    },
+
     async deleteFile(name) {
       const ok = await this.askConfirm('Delete file?', `"${name}" will be permanently deleted.`, 'Delete', true);
       if (!ok) return;
-      await fetch(`/api/files/${encodeURIComponent(name)}`, {method:'DELETE'});
-      this.toast(`${name} deleted`);
+      const r = await this._deleteRequest(name);
+      if (r.ok) {
+        this.files = this.files.filter(f => f.filename !== name);
+        this.toast(`${name} deleted`);
+      } else {
+        const body = await r.json().catch(() => ({}));
+        this.toast(`Failed to delete ${name}: ${body.detail || r.status}`, 'error');
+      }
     },
 
     async deleteSelected() {
       if (!this.selectedFiles.length) return;
       const ok = await this.askConfirm(`Delete ${this.selectedFiles.length} files?`, 'These files will be permanently deleted.', 'Delete All', true);
       if (!ok) return;
-      for (const name of this.selectedFiles)
-        await fetch(`/api/files/${encodeURIComponent(name)}`, {method:'DELETE'});
+      const deleted = [];
+      for (const name of this.selectedFiles) {
+        const r = await this._deleteRequest(name);
+        if (r.ok) deleted.push(name);
+      }
+      this.files = this.files.filter(f => !deleted.includes(f.filename));
       this.selectedFiles = [];
-      this.toast('Files deleted');
+      this.toast(`${deleted.length} file(s) deleted`);
     },
 
     zipSelected() {
@@ -862,6 +917,21 @@ function app() {
         f.expires_at = d.expires_at;
         this.toast(`Expiry set to ${hours}h from now`, 'success');
       }
+    },
+
+    previewType(filename) {
+      if (!filename) return '';
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp','svg','bmp','avif'].includes(ext)) return 'image';
+      if (['mp4','webm','mov','m4v'].includes(ext)) return 'video';
+      if (['mp3','m4a','opus','ogg','flac','aac','wav'].includes(ext)) return 'audio';
+      return '';
+    },
+
+    openPreview(f) {
+      const type = this.previewType(f.filename);
+      if (!type) return;
+      this.preview = { show: true, type, url: `/api/files/download/${encodeURIComponent(f.filename)}`, name: f.filename };
     },
 
     logColor(level) {

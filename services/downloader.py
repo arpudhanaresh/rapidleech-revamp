@@ -79,6 +79,7 @@ async def dispatch(
     max_conn: int = 4,
     torrent_indices: Optional[list[int]] = None,
     format_id: Optional[str] = None,
+    ttl_hours: Optional[int] = None,
 ) -> None:
     """Entry point — routes URL to the right backend."""
     from services import db as _db
@@ -89,7 +90,7 @@ async def dispatch(
         if is_torrent(url):
             # Internal upload sentinels skip network validation — bytes are already local
             from services import torrent_service
-            await torrent_service.start(job_id, url, torrent_indices)
+            await torrent_service.start(job_id, url, torrent_indices, ttl_hours)
         elif is_mega_url(url):
             from services import mega_service
             job_manager.update_job(job_id, status="queued")
@@ -113,7 +114,7 @@ async def dispatch(
         await _db.remove_pending(job_id)
         job = job_manager.get_job(job_id)
         if job and job.status in ("done", "error"):
-            await _post_download(job_id)
+            await _post_download(job_id, ttl_hours)
         job_manager.clear_cancelled(job_id)
 
 
@@ -349,7 +350,7 @@ def _aria2_progress(job_id: str, dl) -> None:
     )
 
 
-async def _post_download(job_id: str) -> None:
+async def _post_download(job_id: str, ttl_hours: Optional[int] = None) -> None:
     """SHA-256 hash + optional ClamAV scan after download completes."""
     from datetime import datetime, timezone, timedelta
     from services import db as _db
@@ -359,15 +360,18 @@ async def _post_download(job_id: str) -> None:
         await job_manager.finish_job(job_id)
         return
 
+    effective_ttl = ttl_hours if ttl_hours is not None else settings.FILE_TTL_DEFAULT_HOURS
+
     filepath = os.path.join(settings.DOWNLOAD_DIR, job.filename)
     # Directories (multi-file torrents) are not hashed
     if not os.path.exists(filepath) or not os.path.isfile(filepath):
-        now = datetime.now(timezone.utc)
-        await _db.set_file_expiry(
-            job.filename,
-            (now + timedelta(hours=settings.FILE_TTL_DEFAULT_HOURS)).isoformat(),
-            now.isoformat(),
-        )
+        if effective_ttl:
+            now = datetime.now(timezone.utc)
+            await _db.set_file_expiry(
+                job.filename,
+                (now + timedelta(hours=effective_ttl)).isoformat(),
+                now.isoformat(),
+            )
         await job_manager.finish_job(job_id)
         return
 
@@ -377,12 +381,13 @@ async def _post_download(job_id: str) -> None:
         result = await asyncio.to_thread(_clam_scan, filepath)
         job_manager.update_job(job_id, scan_result=result, status="done")
 
-    now = datetime.now(timezone.utc)
-    await _db.set_file_expiry(
-        job.filename,
-        (now + timedelta(hours=settings.FILE_TTL_DEFAULT_HOURS)).isoformat(),
-        now.isoformat(),
-    )
+    if effective_ttl:
+        now = datetime.now(timezone.utc)
+        await _db.set_file_expiry(
+            job.filename,
+            (now + timedelta(hours=effective_ttl)).isoformat(),
+            now.isoformat(),
+        )
     await job_manager.finish_job(job_id)
 
 
