@@ -70,14 +70,18 @@ Browser  ──→  RapidLeech (FastAPI)  ──→  Internet
 | | |
 |---|---|
 | **Real-time** | Speed graph, ETA, chunk progress map, seeder/peer count — live via SSE |
+| **In-browser preview** | Images, videos, and audio play directly in the browser without downloading |
 | **Format picker** | YouTube/media: shows all available resolutions with file size before downloading |
 | **Folder browser** | Torrent folders: browse files, download individually or as ZIP with progress bar |
+| **Mobile-friendly** | File table is horizontally scrollable; layout adapts to small screens |
 | **History** | Searchable job history with status, filename, size, SHA-256 |
 | **Activity log** | Timestamped server-side log (last 1000 entries) |
+| **Torrent stats** | Live seeder/peer/leecher count, upload speed, upload:download ratio |
 
 ### Operations
 | | |
 |---|---|
+| **Per-job TTL** | Override the global auto-delete timer per download at submit time (1 h / 3 h / 5 h / 12 h) |
 | **Auto-cleanup** | TTL-based file deletion (default 5 h); active downloads are never touched |
 | **SHA-256** | Computed automatically after every completed download |
 | **ClamAV** | Optional virus scan on completion (Unix socket or TCP) |
@@ -377,12 +381,27 @@ Export a Netscape-format cookies file using a browser extension such as [Get coo
 The **Downloaded Files** section lists all files and torrent folders on disk.
 
 - **Files** — direct download or copy link
+- **In-browser preview** — click the preview icon (▶ / 🖼) on image, video, or audio files to open them in a modal without downloading
+  - Supported: jpg, png, gif, webp, svg, avif, bmp (images); mp4, webm, mov, m4v (video); mp3, m4a, opus, ogg, flac, aac, wav (audio)
 - **Folders (📁)** — click the download icon to open the **Folder Browser**:
   - View all files with individual sizes
   - Download a single file directly
   - **Download as ZIP** — server zips in the background; a progress bar shows files processed; download triggers automatically when ready
 - **Bulk actions** — select multiple items, then ZIP or delete
-- **Expiry timer** — shows time remaining before TTL deletion
+- **Expiry timer** — shows time remaining before TTL deletion; click to extend
+
+### Per-Job TTL
+
+Each download can override the global auto-delete timer. A TTL dropdown next to the fetch bar lets you choose how long the file is kept:
+
+| Option | Description |
+|--------|-------------|
+| After 1 h | Delete 1 hour after download completes |
+| After 3 h | Delete 3 hours after download completes |
+| After 5 h | Delete 5 hours after download completes (default) |
+| After 12 h | Delete 12 hours after download completes |
+
+The chosen TTL applies to that specific download regardless of the server's global `FILE_TTL_HOURS` setting.
 
 ### Settings
 
@@ -402,7 +421,7 @@ Base path: `/api` — Interactive docs at `/api/docs`.
 
 | Method | Endpoint | Body / Params | Description |
 |--------|----------|--------------|-------------|
-| `POST` | `/fetch` | `{url, max_connections?, torrent_file_indices?, format_id?}` | Start a download |
+| `POST` | `/fetch` | `{url, max_connections?, torrent_file_indices?, format_id?, ttl_hours?}` | Start a download |
 | `GET` | `/jobs` | — | List active jobs |
 | `GET` | `/jobs/history` | `?status=&q=&page=` | Paginated job history |
 | `POST` | `/jobs/{id}/cancel` | — | Cancel a job |
@@ -416,6 +435,8 @@ Base path: `/api` — Interactive docs at `/api/docs`.
 | `GET` | `/files` | List downloaded files and folders |
 | `GET` | `/files/download/{name}` | Download a file |
 | `DELETE` | `/files/{name}` | Delete a file or folder |
+| `POST` | `/files/delete` | `{filename}` — delete by name (fallback for proxies that block DELETE) |
+| `PATCH` | `/files/{name}/expiry` | `{hours}` — extend TTL |
 | `POST` | `/files/zip` | `{filenames:[]}` — zip selected files |
 | `GET` | `/files/browse/{dir}` | List contents of a torrent folder |
 | `GET` | `/files/dir-file?dirname=&path=` | Download one file from a folder |
@@ -483,6 +504,9 @@ Base path: `/api` — Interactive docs at `/api/docs`.
 
 ## Troubleshooting
 
+### Delete returns "403 Forbidden"
+Your reverse proxy (nginx or similar) is blocking `DELETE` requests or URLs with percent-encoded characters. Add `DELETE` and `PATCH` to your nginx `location` block's allowed methods, or remove `limit_except`. The app automatically retries deletions via `POST /api/files/delete` when it receives a 403, so deletes still work without any nginx change.
+
 ### Connection refused in browser
 Use `http://` explicitly — browsers silently upgrade to HTTPS. Type the full address: `http://13.x.x.x`.
 
@@ -547,7 +571,7 @@ Beyond maintenance, the architecture has fundamental limitations that a modern r
 | **Database** | None — flat files | Multi-DB: SQLite (default), PostgreSQL, MySQL |
 | **Async downloads** | Blocking PHP execution | Fully async FastAPI; concurrent downloads |
 | **Adding new sources** | Write a PHP plugin per host | Any URL works; yt-dlp handles 1000+ sites automatically |
-| **File manager** | Basic | Browse torrent folders, ZIP download with progress, per-file TTL |
+| **File manager** | Basic | Browse torrent folders, ZIP download with progress, per-job TTL, in-browser preview |
 
 ---
 
