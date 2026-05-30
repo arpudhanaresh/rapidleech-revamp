@@ -7,6 +7,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
+import humanize
 import yt_dlp
 
 from config import settings
