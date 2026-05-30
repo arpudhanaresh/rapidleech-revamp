@@ -75,6 +75,13 @@ def is_mediafire_url(url: str) -> bool:
     return host == "mediafire.com"
 
 
+def is_gdrive_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host in ("drive.google.com", "docs.google.com", "drive.usercontent.google.com")
+
+
 def is_media_url(url: str) -> bool:
     """Return True if yt-dlp has a dedicated (non-generic) extractor for this URL."""
     return any(
@@ -112,6 +119,9 @@ async def dispatch(
         elif is_mediafire_url(url):
             from services import mediafire_service
             await mediafire_service.download(job_id, url, max_conn)
+        elif is_gdrive_url(url):
+            from services import gdrive_service
+            await gdrive_service.download(job_id, url, max_conn)
         elif is_media_url(url):
             await asyncio.to_thread(_ytdlp_download, job_id, url, format_id)
         else:
