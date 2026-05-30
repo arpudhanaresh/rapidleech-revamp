@@ -29,5 +29,8 @@ else
     echo "[entrypoint] aria2c not found, using built-in httpx chunker"
 fi
 
+echo "[entrypoint] Updating yt-dlp to latest version..."
+pip install -U yt-dlp --quiet 2>/dev/null || echo "[entrypoint] yt-dlp update skipped (offline or read-only)"
+
 echo "[entrypoint] Starting RapidLeech-Py..."
 exec python main.py

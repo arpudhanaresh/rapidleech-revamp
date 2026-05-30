@@ -1,24 +1,32 @@
 from __future__ import annotations
 import asyncio
+import logging
 import os
+import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Annotated
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from config import settings
 from services import file_service, db
 from services.security import sanitize_filename
 
-_COOKIES_FILE = Path(__file__).resolve().parent.parent / "data" / "cookies.txt"
 _MIME_ZIP = "application/zip"
 _404 = {404: {"description": "Not found"}}
 _MSG_NOT_FOUND = "File not found"
 
 router = APIRouter(tags=["files"])
+
+# Short-lived stream tokens: token -> (filename, expires_at)
+_stream_tokens: dict[str, tuple[str, float]] = {}
+_TOKEN_TTL = 300  # seconds
 
 
 def _served_bytes(range_header: Optional[str], file_size: int) -> int:
@@ -96,6 +104,50 @@ class DeleteRequest(BaseModel):
 async def delete_file_post(body: DeleteRequest):
     """POST fallback for proxies that block DELETE or encode filenames in URLs."""
     return await _do_delete_file(Path(body.filename).name)
+
+
+class StreamTokenRequest(BaseModel):
+    filename: str
+
+
+@router.post("/files/stream-token", responses={404: {"description": _MSG_NOT_FOUND}})
+async def create_stream_token(body: StreamTokenRequest):
+    """Issue a short-lived token for streaming a file by name in a clean URL (no encoded chars)."""
+    name = Path(body.filename).name
+    if not file_service.get_filepath(name):
+        raise HTTPException(404, _MSG_NOT_FOUND)
+    # Purge expired tokens lazily
+    now = time.monotonic()
+    expired = [t for t, (_, exp) in _stream_tokens.items() if exp < now]
+    for t in expired:
+        del _stream_tokens[t]
+    token = secrets.token_urlsafe(16)
+    _stream_tokens[token] = (name, now + _TOKEN_TTL)
+    return {"token": token}
+
+
+@router.get("/files/stream/{token}", responses={404: {"description": "Token not found or expired"}})
+async def stream_by_token(token: str, request: Request):
+    """Serve a file by short-lived token — avoids nginx WAF blocking percent-encoded filenames."""
+    entry = _stream_tokens.get(token)
+    if not entry or entry[1] < time.monotonic():
+        _stream_tokens.pop(token, None)
+        raise HTTPException(404, "Token not found or expired")
+    filename, _ = entry
+    path = file_service.get_filepath(filename)
+    if not path:
+        raise HTTPException(404, _MSG_NOT_FOUND)
+    if os.path.isdir(path):
+        raise HTTPException(400, "Cannot stream a directory")
+    size = os.path.getsize(path)
+    served = _served_bytes(request.headers.get("range"), size)
+    await db.increment_uploaded(served)
+    return FileResponse(
+        path,
+        filename=filename,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 class ZipRequest(BaseModel):
@@ -197,26 +249,3 @@ async def zip_files(body: ZipRequest):
         headers={"Content-Disposition": 'attachment; filename="rapidleech_files.zip"'},
     )
 
-
-# ── YouTube cookies ───────────────────────────────────────────────────────────
-
-@router.get("/cookies/status")
-async def cookies_status():
-    return {"exists": _COOKIES_FILE.exists()}
-
-
-@router.post("/cookies/upload", responses={400: {"description": "Empty file"}})
-async def upload_cookies(file: Annotated[UploadFile, File()]):
-    content = await file.read()
-    if not content.strip():
-        raise HTTPException(400, "Empty file")
-    _COOKIES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _COOKIES_FILE.write_bytes(content)
-    return {"ok": True}
-
-
-@router.delete("/cookies")
-async def delete_cookies():
-    if _COOKIES_FILE.exists():
-        _COOKIES_FILE.unlink()
-    return {"ok": True}

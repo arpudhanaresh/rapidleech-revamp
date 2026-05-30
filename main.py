@@ -16,7 +16,7 @@ from middleware.rate_limiter import setup_rate_limiter
 from middleware.security_headers import add_security_headers
 from middleware.abuse_detector import AbuseDetectorMiddleware
 from services import db, disk_monitor, cleanup
-from routers import fetch, files, torrent, stats, health, events, pages, ytdlp
+from routers import fetch, files, torrent, stats, health, events, pages
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -72,7 +72,7 @@ if _STATIC.exists():
 
 # ── API routers ───────────────────────────────────────────────────────────────
 for router in [fetch.router, files.router, torrent.router, stats.router,
-               health.router, events.router, ytdlp.router]:
+               health.router, events.router]:
     app.include_router(router, prefix="/api")
 
 # ── Page routers (HTML) ───────────────────────────────────────────────────────

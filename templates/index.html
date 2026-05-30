@@ -285,69 +285,6 @@
       </div>
     </div>
 
-    <!-- YT FORMAT PICKER MODAL ─────────────────────────────────── -->
-    <div x-show="ytPicker.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition>
-      <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col slide-in">
-        <div class="flex items-start justify-between mb-4">
-          <div>
-            <h3 class="text-[#00e5ff] font-bold">Select Format</h3>
-            <p class="text-gray-500 text-xs mt-0.5 truncate max-w-xs" x-text="ytPicker.url"></p>
-          </div>
-          <button @click="ytPicker.show=false" class="text-gray-600 hover:text-gray-300 text-xl leading-none ml-4">✕</button>
-        </div>
-
-        <!-- Loading -->
-        <div x-show="ytPicker.loading" class="flex-1 flex items-center justify-center py-10 gap-3 text-gray-500 text-sm">
-          <svg class="animate-spin w-5 h-5 text-[#00e5ff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-          Fetching available formats…
-        </div>
-
-        <!-- Error -->
-        <div x-show="!ytPicker.loading && ytPicker.error" class="py-4 space-y-3">
-          <p class="text-red-400 text-sm">✕ <span x-text="ytPicker.error"></span></p>
-          <p class="text-gray-500 text-xs">You can still try downloading with the default format.</p>
-        </div>
-
-        <!-- Format list -->
-        <div x-show="!ytPicker.loading && !ytPicker.error" class="flex-1 overflow-y-auto space-y-1 mb-4">
-          <label for="fmt-auto" class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-colors border-2"
-            :class="ytPicker.selected==='__auto__'?'border-[#00e5ff]/40 bg-[#0d1f22]':'border-transparent'">
-            <input type="radio" id="fmt-auto" value="__auto__" x-model="ytPicker.selected" class="accent-[#00e5ff]">
-            <div class="flex-1">
-              <div class="text-white text-sm font-bold">Best (Auto)</div>
-              <div class="text-gray-500 text-[10px]">highest quality — recommended</div>
-            </div>
-            <span class="px-2 py-0.5 rounded-full text-[10px] bg-[#00e5ff]/20 text-[#00e5ff] border border-[#00e5ff]/30">AUTO</span>
-          </label>
-          <template x-for="f in ytPicker.formats" :key="f.format_id">
-            <label :for="'fmt-'+f.format_id" :aria-label="f.label" class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-colors border-2"
-              :class="ytPicker.selected===f.format_id?'border-[#00e5ff]/40 bg-[#0d1f22]':'border-transparent'">
-              <input type="radio" :id="'fmt-'+f.format_id" :value="f.format_id" x-model="ytPicker.selected" class="accent-[#00e5ff]">
-              <div class="flex-1 min-w-0">
-                <div class="text-white text-sm font-semibold" x-text="f.label"></div>
-                <div class="text-gray-500 text-[10px]" x-text="f.size_str !== '?' ? f.size_str : 'Size unknown'"></div>
-              </div>
-              <span class="px-2 py-0.5 rounded-full text-[10px] border shrink-0"
-                :class="f.has_video && f.has_audio ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-purple-900/40 text-purple-400 border-purple-800'"
-                x-text="f.has_video && f.has_audio ? 'VIDEO+AUDIO' : 'AUDIO ONLY'">
-              </span>
-            </label>
-          </template>
-        </div>
-
-        <div class="flex gap-3 justify-end pt-3 border-t border-[#222]" x-show="!ytPicker.loading">
-          <button @click="ytPicker.show=false" class="px-4 py-2 rounded-lg bg-[#222] hover:bg-[#2a2a2a] text-gray-400 text-sm transition-colors">Cancel</button>
-          <button @click="startYtDownload()"
-            class="px-4 py-2 rounded-lg bg-[#00e5ff] hover:bg-cyan-300 text-black font-bold text-sm transition-colors">
-            ⬇ Download
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- FOLDER BROWSER MODAL -->
     <div x-show="folderModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" x-transition style="display:none">
       <div class="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] flex flex-col slide-in">
@@ -534,15 +471,29 @@
   </div>
 
   <!-- ── Preview modal ─────────────────────────────────────────────── -->
-  <div x-show="preview.show" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm p-4" @click="preview.show=false" x-transition>
+  <div x-show="preview.show" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm p-4" @click="closePreview()" x-transition>
     <div class="w-full max-w-5xl flex flex-col items-center gap-3" @click.stop>
       <div class="flex items-center justify-between w-full">
         <span class="text-gray-400 text-xs truncate max-w-[70vw]" x-text="preview.name"></span>
-        <button @click="preview.show=false" class="text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg bg-[#1a1a1a] hover:bg-[#222] transition-colors ml-4 shrink-0">✕ Close</button>
+        <button @click="closePreview()" class="text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg bg-[#1a1a1a] hover:bg-[#222] transition-colors ml-4 shrink-0">✕ Close</button>
       </div>
-      <img x-show="preview.type==='image'" :src="preview.url" class="max-w-full max-h-[82vh] rounded-xl object-contain shadow-2xl" :alt="preview.name">
-      <video x-show="preview.type==='video'" :src="preview.url" controls autoplay playsinline class="max-w-full max-h-[82vh] w-full rounded-xl shadow-2xl bg-black"></video>
-      <audio x-show="preview.type==='audio'" :src="preview.url" controls class="w-full max-w-lg mt-4"></audio>
+      <!-- Loading / transcoding progress -->
+      <div x-show="preview.loading" class="flex flex-col items-center gap-3 py-12">
+        <div class="text-gray-300 text-sm" x-text="preview.loadingMsg || 'Processing…'"></div>
+        <div class="w-64 bg-[#1a1a1a] rounded-full h-2">
+          <div class="bg-[#00e5ff] h-2 rounded-full transition-all duration-300" :style="`width:${preview.progress}%`"></div>
+        </div>
+        <div class="text-gray-500 text-xs" x-text="`${preview.progress}%`"></div>
+        <div x-show="preview.progress >= 50 && preview.progress < 100" class="text-yellow-400/60 text-xs">Large files may take a moment — only the first 150 MB is fetched for preview</div>
+      </div>
+      <!-- Error state -->
+      <div x-show="preview.error" class="flex flex-col items-center gap-3 py-10">
+        <div class="text-red-400 text-sm" x-text="preview.error"></div>
+        <a :href="`/api/files/download/${encodeURIComponent(preview.name)}`" class="text-xs px-4 py-2 rounded-lg bg-[#1a1a1a] hover:bg-[#222] text-gray-300 transition-colors">Download file</a>
+      </div>
+      <img x-show="preview.type==='image' && !preview.loading" :src="preview.url" class="max-w-full max-h-[82vh] rounded-xl object-contain shadow-2xl" :alt="preview.name">
+      <video x-show="preview.type==='video' && !preview.loading && preview.url && !preview.error" x-ref="previewVideo" :src="preview.url" controls autoplay playsinline class="max-w-full max-h-[82vh] w-full rounded-xl shadow-2xl bg-black" @error="preview.error='Browser cannot play this codec. Try downloading and playing locally (VLC recommended).'"><track kind="captions"></video>
+      <audio x-show="preview.type==='audio' && !preview.loading" :src="preview.url" controls class="w-full max-w-lg mt-4"></audio>
     </div>
   </div>
 
@@ -565,9 +516,9 @@ function app() {
     extendMenuPos: { top: 0, right: 0 },
     extendMenuFile: null,
     torrentPicker: { show: false, jobId: null, name: '', files: [], selected: [], all: false },
-    ytPicker: { show: false, url: '', formats: [], loading: false, error: '', selected: '__auto__' },
     folderModal: { show: false, loading: false, name: '', totalFiles: 0, totalSize: '', files: [], zipping: false, zipFilesDone: 0, zipTotalFiles: 0, zipJobId: null, _poll: null },
-    preview: { show: false, type: '', url: '', name: '' },
+    preview: { show: false, type: '', url: '', name: '', loading: false, progress: 0, loadingMsg: '', error: '' },
+    _ffmpeg: null,
     ttlHours: {{ ttl_default_hours }},
     _sseSource: null,
 
@@ -595,13 +546,15 @@ function app() {
       if (v.startsWith('magnet:')) return '🧲 TORRENT';
       if (v.toLowerCase().endsWith('.torrent')) return '📦 .TORRENT FILE';
       const host = (() => { try { return new URL(v).hostname.replace(/^www\./,''); } catch{ return ''; }})();
-      const media = ['youtube.com','youtu.be','twitter.com','x.com','tiktok.com','instagram.com','vimeo.com','twitch.tv'];
+      if (host === 'youtube.com' || host === 'youtu.be') return '✕ YouTube not supported';
+      const media = ['twitter.com','x.com','tiktok.com','instagram.com','vimeo.com','twitch.tv'];
       if (media.some(d => host.endsWith(d))) return '▶ MEDIA (yt-dlp)';
       return '';
     },
     get urlTypeColor() {
       if (!this.urlType) return '';
       if (this.urlType.startsWith('🧲') || this.urlType.startsWith('📦')) return 'text-blue-400';
+      if (this.urlType.startsWith('✕')) return 'text-red-400';
       if (this.urlType.startsWith('▶')) return 'text-purple-400';
       return 'text-[#00e5ff]';
     },
@@ -610,50 +563,17 @@ function app() {
       const raw = this.url.trim();
       if (!raw || this.submitting) return;
       const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
-      // Single YouTube URL → show format picker first
-      if (lines.length === 1 && this._isYouTube(lines[0])) {
-        this.url = '';
-        this.submitting = true;
-        await this._fetchYtFormats(lines[0]);
-        this.submitting = false;
-        return;
+      for (const line of lines) {
+        try {
+          const h = new URL(line).hostname.replace(/^www\./, '');
+          if (h === 'youtube.com' || h === 'youtu.be') {
+            this.toast('YouTube downloads are not supported.', 'error');
+            continue;
+          }
+        } catch {}
+        await this._doFetch(line);
       }
-      this.submitting = true;
-      for (const line of lines) await this._doFetch(line);
       this.url = '';
-      this.submitting = false;
-    },
-
-    _isYouTube(url) {
-      try {
-        const h = new URL(url).hostname.replace(/^www\./, '');
-        return h === 'youtube.com' || h === 'youtu.be';
-      } catch { return false; }
-    },
-
-    async _fetchYtFormats(url) {
-      this.ytPicker = { show: true, url, formats: [], loading: true, error: '', selected: '__auto__' };
-      try {
-        const r = await fetch('/api/ytdlp/formats', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
-        const d = await r.json();
-        this.ytPicker.error = d.error || '';
-        this.ytPicker.formats = d.formats || [];
-      } catch {
-        this.ytPicker.error = 'Failed to reach server';
-      }
-      this.ytPicker.loading = false;
-    },
-
-    async startYtDownload() {
-      const { url, selected } = this.ytPicker;
-      this.ytPicker.show = false;
-      this.submitting = true;
-      await this._doFetch(url, selected === '__auto__' ? null : selected);
-      this.submitting = false;
     },
 
     async _doFetch(url, format_id = null) {
@@ -923,15 +843,129 @@ function app() {
       if (!filename) return '';
       const ext = filename.split('.').pop().toLowerCase();
       if (['jpg','jpeg','png','gif','webp','svg','bmp','avif'].includes(ext)) return 'image';
-      if (['mp4','webm','mov','m4v'].includes(ext)) return 'video';
+      if (['mp4','webm','mov','m4v','mkv','avi','ts','m2ts','mpeg','mpg','wmv','flv','3gp','rmvb','divx','xvid','vob'].includes(ext)) return 'video';
       if (['mp3','m4a','opus','ogg','flac','aac','wav'].includes(ext)) return 'audio';
       return '';
+    },
+
+    _isNativeVideo(filename) {
+      return ['mp4','webm','mov','m4v'].includes(filename.split('.').pop().toLowerCase());
     },
 
     openPreview(f) {
       const type = this.previewType(f.filename);
       if (!type) return;
-      this.preview = { show: true, type, url: `/api/files/download/${encodeURIComponent(f.filename)}`, name: f.filename };
+      const directUrl = `/api/files/download/${encodeURIComponent(f.filename)}`;
+      if (type === 'video' && !this._isNativeVideo(f.filename)) {
+        this.preview = { show: true, type: 'video', url: '', name: f.filename, loading: true, progress: 0, loadingMsg: 'Loading ffmpeg…', error: '' };
+        // Get a clean token URL to avoid nginx WAF blocking percent-encoded filenames in the path
+        fetch('/api/files/stream-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: f.filename }),
+        })
+          .then(r => r.ok ? r.json() : Promise.reject(`Token request failed: ${r.status}`))
+          .then(({ token }) => this._loadWithFFmpeg(f.filename, `/api/files/stream/${token}`))
+          .catch(e => { this.preview.loading = false; this.preview.error = `Could not start preview: ${e}`; });
+      } else {
+        this.preview = { show: true, type, url: directUrl, name: f.filename, loading: false, progress: 0, loadingMsg: '', error: '' };
+      }
+    },
+
+    closePreview() {
+      if (this.preview.url?.startsWith('blob:')) URL.revokeObjectURL(this.preview.url);
+      this.preview.show = false;
+      this.$nextTick(() => {
+        const v = this.$refs.previewVideo;
+        if (v) { v.pause(); v.src = ''; v.load(); }
+      });
+    },
+
+    async _loadScript(src) {
+      if (document.querySelector(`script[src="${src}"]`)) return;
+      await new Promise((res, rej) => {
+        const s = document.createElement('script'); s.src = src;
+        s.onload = res; s.onerror = rej; document.head.appendChild(s);
+      });
+    },
+
+    async _loadWithFFmpeg(filename, sourceUrl) {
+      const PREVIEW_BYTES = 150 * 1024 * 1024; // 150 MB — covers ~30–90 s depending on bitrate
+      try {
+        // 1. Load ffmpeg.wasm from CDN (cached after first use)
+        if (!window.FFmpeg) {
+          await this._loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js');
+        }
+        const { createFFmpeg } = window.FFmpeg;
+        if (!this._ffmpeg) {
+          // Use single-threaded core — works without SharedArrayBuffer (COOP/COEP not required)
+          this._ffmpeg = createFFmpeg({
+            log: false,
+            corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js',
+            progress: ({ ratio }) => {
+              if (ratio > 0) this.preview.progress = Math.min(95, 60 + Math.round(ratio * 35));
+            },
+          });
+        }
+        if (!this._ffmpeg.isLoaded()) {
+          this.preview.loadingMsg = 'Loading ffmpeg.wasm (~30 MB, cached after first use)…';
+          this.preview.progress = 10;
+          await this._ffmpeg.load();
+        }
+
+        // 2. Fetch first 150 MB via Range request
+        this.preview.loadingMsg = 'Fetching video (first 150 MB)…';
+        this.preview.progress = 20;
+        const resp = await fetch(sourceUrl, { headers: { Range: `bytes=0-${PREVIEW_BYTES - 1}` } });
+        if (!resp.ok && resp.status !== 206) throw new Error(`Fetch failed: ${resp.status}`);
+        this.preview.progress = 55;
+        const buf = new Uint8Array(await resp.arrayBuffer());
+
+        // 3. Write to ffmpeg virtual FS
+        const ext = filename.split('.').pop().toLowerCase();
+        const inFile = `in.${ext}`;
+        this._ffmpeg.FS('writeFile', inFile, buf);
+        this.preview.loadingMsg = 'Re-muxing to MP4…';
+        this.preview.progress = 60;
+
+        // 4. Try fast stream-copy first (no re-encoding, just container change)
+        let ok = false;
+        try {
+          await this._ffmpeg.run(
+            '-i', inFile,
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', 'frag_keyframe+empty_moov',
+            '-t', '90', '-y', 'out.mp4'
+          );
+          ok = true;
+        } catch (_) { /* fall through to transcode */ }
+
+        // 5. Fallback: transcode video to H.264 (slower but universal)
+        if (!ok) {
+          this.preview.loadingMsg = 'Transcoding to H.264 (may take a minute)…';
+          await this._ffmpeg.run(
+            '-i', inFile,
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', 'frag_keyframe+empty_moov',
+            '-t', '60', '-y', 'out.mp4'
+          );
+        }
+
+        // 6. Read output and create Blob URL
+        const out = this._ffmpeg.FS('readFile', 'out.mp4');
+        const blobUrl = URL.createObjectURL(new Blob([out.buffer], { type: 'video/mp4' }));
+        try { this._ffmpeg.FS('unlink', inFile); } catch (_) {}
+        try { this._ffmpeg.FS('unlink', 'out.mp4'); } catch (_) {}
+
+        this.preview.url = blobUrl;
+        this.preview.loadingMsg = '';
+        this.preview.loading = false;
+        this.preview.progress = 100;
+      } catch (e) {
+        this.preview.loading = false;
+        this.preview.error = `Could not process video: ${e.message || e}`;
+      }
     },
 
     logColor(level) {

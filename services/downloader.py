@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-import humanize
 import httpx
 import yt_dlp
 
@@ -15,7 +14,18 @@ from services import job_manager, accelerator
 from services.fmt import fmt_eta
 from services.security import sanitize_filename
 
-_COOKIES_FILE = Path(__file__).resolve().parent.parent / "data" / "cookies.txt"
+
+_YT_HOSTS = {"youtube.com", "youtu.be", "music.youtube.com", "www.youtube.com",
+             "m.youtube.com", "gaming.youtube.com"}
+
+
+def _is_youtube(url: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+        return urlparse(url).hostname in _YT_HOSTS
+    except Exception:
+        return False
+
 
 _aria2_client = None
 
@@ -87,6 +97,8 @@ async def dispatch(
     if not any(url.startswith(p) for p in _INTERNAL_PREFIXES):
         await _db.save_pending(job_id, url, max_conn)
     try:
+        if _is_youtube(url):
+            raise ValueError("YouTube downloads are not supported on this server.")
         if is_torrent(url):
             # Internal upload sentinels skip network validation — bytes are already local
             from services import torrent_service
@@ -217,8 +229,6 @@ def _ytdlp_download(job_id: str, url: str, format_id: Optional[str] = None) -> N
         "concurrent_fragment_downloads": 8,
         "writesubtitles": False,
     }
-    if _COOKIES_FILE.exists():
-        ydl_opts["cookiefile"] = str(_COOKIES_FILE)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
@@ -391,99 +401,6 @@ async def _post_download(job_id: str, ttl_hours: Optional[int] = None) -> None:
     await job_manager.finish_job(job_id)
 
 
-
-_QUALITY_PRESETS = [
-    (4320, "8K (4320p)"),
-    (2160, "4K (2160p)"),
-    (1440, "2K (1440p)"),
-    (1080, "1080p HD"),
-    (720,  "720p HD"),
-    (480,  "480p"),
-    (360,  "360p"),
-]
-
-
-def _best_size_at_height(raw: list, height: int) -> str:
-    sizes = [
-        int(f.get("filesize") or f.get("filesize_approx") or 0)
-        for f in raw if int(f.get("height") or 0) == height
-    ]
-    b = max(sizes, default=0)
-    return humanize.naturalsize(b, binary=True) if b else "?"
-
-
-def _best_audio_entry(raw: list) -> Optional[dict]:
-    candidates = [
-        f for f in raw
-        if (f.get("vcodec") or "none").lower() == "none"
-        and (f.get("acodec") or "none").lower() != "none"
-    ]
-    return max(candidates, key=lambda f: float(f.get("abr") or 0), default=None)
-
-
-def _fetch_raw_formats(url: str) -> list:
-    opts: dict = {"quiet": True, "no_warnings": True}
-    if _COOKIES_FILE.exists():
-        opts["cookiefile"] = str(_COOKIES_FILE)
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False) or {}
-    return info.get("formats") or []
-
-
-def _collect_video_presets(raw: list, heights: set) -> list[dict]:
-    result: list[dict] = []
-    seen_best: set[int] = set()
-    for threshold, label in _QUALITY_PRESETS:
-        avail = [h for h in heights if h <= threshold]
-        if not avail:
-            continue
-        best_h = max(avail)
-        if best_h in seen_best:
-            continue
-        seen_best.add(best_h)
-        result.append({
-            "format_id": f"bestvideo[height<={threshold}]+bestaudio/best[height<={threshold}]/best",
-            "label": label, "height": threshold, "ext": "mp4",
-            "has_video": True, "has_audio": True,
-            "size_str": _best_size_at_height(raw, best_h),
-        })
-    return result
-
-
-def _make_audio_entry(raw: list) -> Optional[dict]:
-    fa = _best_audio_entry(raw)
-    if not fa:
-        return None
-    abr = float(fa.get("abr") or 0)
-    ext = (fa.get("ext") or "m4a").upper()
-    size = int(fa.get("filesize") or fa.get("filesize_approx") or 0)
-    label = f"Audio only · {int(abr)}kbps {ext}" if abr else "Audio only"
-    return {
-        "format_id": "bestaudio/best", "label": label,
-        "height": 0, "ext": "m4a",
-        "has_video": False, "has_audio": True,
-        "size_str": humanize.naturalsize(size, binary=True) if size else "?",
-    }
-
-
-def _has_audio_only_stream(raw: list) -> bool:
-    return any(
-        (f.get("vcodec") or "none").lower() == "none"
-        and (f.get("acodec") or "none").lower() != "none"
-        for f in raw
-    )
-
-
-def extract_formats(url: str) -> list[dict]:
-    """Return quality-tier presets filtered to what the video actually offers."""
-    raw = _fetch_raw_formats(url)
-    heights: set[int] = {int(f.get("height") or 0) for f in raw if f.get("height")}
-    result = _collect_video_presets(raw, heights)
-    if _has_audio_only_stream(raw):
-        entry = _make_audio_entry(raw)
-        if entry:
-            result.append(entry)
-    return result
 
 
 def _clam_scan(path: str) -> str:

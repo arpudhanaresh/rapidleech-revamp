@@ -115,70 +115,11 @@
       </div>
     </section>
 
-    <!-- YOUTUBE COOKIES ─────────────────────────────────────────── -->
-    <section class="bg-[#111] border border-[#222] rounded-2xl p-5 space-y-3" x-data="cookiesMgr()">
-      <div class="flex items-center justify-between">
-        <div class="text-[10px] text-gray-500 uppercase tracking-wider">▶ YouTube Cookies</div>
-        <span x-show="loaded" class="text-[10px] text-green-400 font-bold">✓ Active</span>
-        <span x-show="!loaded" class="text-[10px] text-gray-600">Not set</span>
-      </div>
-      <p class="text-[11px] text-gray-500">
-        YouTube blocks downloads from server IPs. Export your browser cookies using
-        <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" class="text-[#00e5ff] hover:underline">Get cookies.txt Locally</a>
-        (Chrome) or
-        <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" class="text-[#00e5ff] hover:underline">cookies.txt</a>
-        (Firefox), then upload the file here.
-      </p>
-      <div class="flex gap-3 items-center flex-wrap">
-        <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d0d0d] border border-[#333] hover:border-[#555] cursor-pointer transition-colors text-sm text-gray-400 hover:text-gray-200">
-          📄 Upload cookies.txt
-          <input type="file" accept=".txt,text/plain" class="hidden" @change="upload($event)">
-        </label>
-        <button x-show="loaded" @click="remove()"
-          class="px-4 py-2 rounded-xl bg-red-900/30 hover:bg-red-700/50 text-red-400 text-sm border border-red-800 transition-colors">
-          🗑 Remove
-        </button>
-        <span x-show="msg" x-text="msg" class="text-xs" :class="ok ? 'text-green-400' : 'text-red-400'"></span>
-      </div>
-    </section>
-
   </main>
 
   <footer class="text-center text-gray-700 text-xs py-6">
     RapidLeech-Py — Powered by yt-dlp, aria2 &amp; libtorrent
   </footer>
 
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14/dist/cdn.min.js"></script>
-<script>
-function cookiesMgr() {
-  return {
-    loaded: false, msg: '', ok: true,
-    async init() {
-      const r = await fetch('/api/cookies/status');
-      const d = await r.json();
-      this.loaded = d.exists;
-    },
-    async upload(e) {
-      const file = e.target.files[0];
-      e.target.value = '';
-      if (!file) return;
-      const form = new FormData();
-      form.append('file', file);
-      const r = await fetch('/api/cookies/upload', { method: 'POST', body: form });
-      this.ok = r.ok;
-      this.msg = r.ok ? 'Cookies uploaded — YouTube downloads will now use them.' : 'Upload failed.';
-      if (r.ok) this.loaded = true;
-      setTimeout(() => this.msg = '', 4000);
-    },
-    async remove() {
-      await fetch('/api/cookies', { method: 'DELETE' });
-      this.loaded = false;
-      this.ok = true;
-      this.msg = 'Cookies removed.';
-      setTimeout(() => this.msg = '', 3000);
-    },
-  };
-}
-</script>
 </body>
 </html>
