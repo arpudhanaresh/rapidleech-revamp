@@ -30,3 +30,6 @@ Thumbs.db
 
 # Debug scripts
 debug_ytdlp.py
+
+# Claude Code
+.claude/settings.json
